@@ -12,6 +12,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	CONFIG_PATH = "lunar.yml"
+)
+
 type User struct {
 	ID int64 `bun:",pk,autoincrement"`
 }
@@ -21,32 +25,13 @@ type Config struct {
 }
 
 func main() {
-	// List all databases
-	listAllDatabases()
-
-	// Ask user to which database to connect
-	var database string
-	fmt.Print("Enter database name: ")
-	fmt.Scanln(&database)
-
-	// Connect to the selected database
-	db := connectToDatabase(fmt.Sprintf("postgres://postgres:@localhost:5432/%s?sslmode=disable", database))
-
-	// Sample query
-	users := make([]User, 0)
-	ctx := context.Background()
-	if err := db.NewSelect().Model(&users).OrderExpr("id ASC").Scan(ctx); err != nil {
-		panic(err)
+	config, err := ReadConfig()
+	if err != nil {
+		startOnboarding()
+		config, _ = ReadConfig()
 	}
-	fmt.Printf("all users: %v\n\n", users)
 
-	// Create a config file
-	config := &Config{}
-	config.Database = database
-	configPath := "lunar.yml"
-	if err := WriteConfig(config, configPath); err != nil {
-		panic(err)
-	}
+	connectToDatabaseAndQuery(config.Database)
 }
 
 func listAllDatabases() {
@@ -75,4 +60,54 @@ func WriteConfig(config *Config, path string) error {
 	defer file.Close()
 
 	return yaml.NewEncoder(file).Encode(config)
+}
+
+func ReadConfig() (*Config, error) {
+	config := &Config{}
+
+	file, err := os.Open(CONFIG_PATH)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	d := yaml.NewDecoder(file)
+	if err := d.Decode(&config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+func storeConfig(database string) {
+	config := &Config{}
+	config.Database = database
+	configPath := CONFIG_PATH
+	if err := WriteConfig(config, configPath); err != nil {
+		panic(err)
+	}
+}
+
+func startOnboarding() {
+	fmt.Println("Welcome to Lunar! Let's get started.")
+
+	listAllDatabases()
+
+	var database string
+	fmt.Print("Enter database name: ")
+	fmt.Scanln(&database)
+
+	storeConfig(database)
+}
+
+func connectToDatabaseAndQuery(database string) {
+	db := connectToDatabase(fmt.Sprintf("postgres://postgres:@localhost:5432/%s?sslmode=disable", database))
+
+	// Sample query
+	users := make([]User, 0)
+	ctx := context.Background()
+	if err := db.NewSelect().Model(&users).OrderExpr("id ASC").Scan(ctx); err != nil {
+		panic(err)
+	}
+	fmt.Printf("all users: %v\n\n", users)
 }
