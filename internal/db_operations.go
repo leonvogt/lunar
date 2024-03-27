@@ -10,6 +10,10 @@ import (
 	"github.com/uptrace/bun/driver/pgdriver"
 )
 
+type User struct {
+	ID int64 `bun:",pk,autoincrement"`
+}
+
 func ListAllDatabases() {
 	db := ConnectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
 
@@ -28,7 +32,7 @@ func ConnectToDatabase(databaseUrl string) *bun.DB {
 }
 
 func ConnectToDatabaseAndQuery(database string) {
-	db := internal.ConnectToDatabase(fmt.Sprintf("postgres://postgres:@localhost:5432/%s?sslmode=disable", database))
+	db := ConnectToDatabase(fmt.Sprintf("postgres://postgres:@localhost:5432/%s?sslmode=disable", database))
 
 	// Sample query
 	users := make([]User, 0)
