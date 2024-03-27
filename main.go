@@ -1,14 +1,11 @@
 package main
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 	"os"
 
-	"github.com/uptrace/bun"
-	"github.com/uptrace/bun/dialect/pgdialect"
-	"github.com/uptrace/bun/driver/pgdriver"
+	"github.com/leonvogt/lunar/internal"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -31,24 +28,7 @@ func main() {
 		config, _ = ReadConfig()
 	}
 
-	connectToDatabaseAndQuery(config.Database)
-}
-
-func listAllDatabases() {
-	db := connectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
-
-	ctx := context.Background()
-	databases := make([]string, 0)
-	if err := db.NewSelect().Column("datname").Model(&databases).Table("pg_database").Where("datistemplate = false").Scan(ctx); err != nil {
-		panic(err)
-	}
-	fmt.Printf("all databases: %v\n\n", databases)
-}
-
-func connectToDatabase(databaseUrl string) *bun.DB {
-	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(databaseUrl)))
-	db := bun.NewDB(sqldb, pgdialect.New())
-	return db
+	internal.ConnectToDatabaseAndQuery(config.Database)
 }
 
 func WriteConfig(config *Config, path string) error {
@@ -91,23 +71,11 @@ func storeConfig(database string) {
 func startOnboarding() {
 	fmt.Println("Welcome to Lunar! Let's get started.")
 
-	listAllDatabases()
+	internal.ListAllDatabases()
 
 	var database string
 	fmt.Print("Enter database name: ")
 	fmt.Scanln(&database)
 
 	storeConfig(database)
-}
-
-func connectToDatabaseAndQuery(database string) {
-	db := connectToDatabase(fmt.Sprintf("postgres://postgres:@localhost:5432/%s?sslmode=disable", database))
-
-	// Sample query
-	users := make([]User, 0)
-	ctx := context.Background()
-	if err := db.NewSelect().Model(&users).OrderExpr("id ASC").Scan(ctx); err != nil {
-		panic(err)
-	}
-	fmt.Printf("all users: %v\n\n", users)
 }
