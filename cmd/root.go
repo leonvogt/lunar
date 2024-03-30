@@ -21,8 +21,7 @@ func Execute() {
 }
 
 func init() {
-	cfgFile := "lunar.yml"
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./lunar.yml)")
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(snapshotCmd)
+	rootCmd.AddCommand(restoreCmd)
 }

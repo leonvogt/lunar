@@ -8,32 +8,32 @@ import (
 )
 
 var (
-	snapshotCmd = &cobra.Command{
-		Use:   "snapshot",
-		Short: "Create a snapshot of your database",
+	restoreCmd = &cobra.Command{
+		Use:   "restore",
+		Short: "Restore a snapshot of your database",
 		Run: func(_ *cobra.Command, args []string) {
-			createSnapshot(args)
+			restoreSnapshot(args)
 		},
 	}
 )
 
-func createSnapshot(args []string) {
+func restoreSnapshot(args []string) {
 	if !internal.DoesConfigExist() {
 		fmt.Println("There seems to be no configuration file. Please run 'lunar init' first.")
 		return
 	}
 
 	if len(args) != 1 {
-		fmt.Println("Please provide a name for the snapshot.")
+		fmt.Println("Please provide a snapshot name.")
 		return
 	}
 
 	snapshotName := args[0]
 	config, _ := internal.ReadConfig()
 	snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
-	fmt.Println("Creating snapshot for database", config.DatabaseName, "with name", snapshotName)
+	fmt.Println("Restoring snapshot ", snapshotName, " ("+snapshotDatabaseName+") for database ", config.DatabaseName)
 
 	internal.TerminateAllCurrentConnections(config.DatabaseName)
 	internal.TerminateAllCurrentConnections(snapshotDatabaseName)
-	internal.CreateSnapshot(config.DatabaseName, snapshotDatabaseName)
+	internal.RestoreSnapshot(config.DatabaseName, snapshotDatabaseName)
 }
