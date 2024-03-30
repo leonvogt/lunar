@@ -50,3 +50,8 @@ func StoreConfig(database string) {
 		panic(err)
 	}
 }
+
+func DoesConfigExist() bool {
+	_, err := os.Stat(CONFIG_PATH)
+	return !os.IsNotExist(err)
+}

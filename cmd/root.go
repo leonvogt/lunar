@@ -7,9 +7,10 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "Lunar",
-	Short: "A database snapshot tool for PostgreSQL databases.",
-	Long:  "Use Lunar to create and restore database snapshots for PostgreSQL databases. \nRun 'lunar --help' for more information.",
+	Use:     "Lunar",
+	Version: "0.0.1",
+	Short:   "A database snapshot tool for PostgreSQL databases.",
+	Long:    "Use Lunar to create and restore database snapshots for PostgreSQL databases. \nRun 'lunar --help' for more information.",
 }
 
 func Execute() {
@@ -22,4 +23,5 @@ func Execute() {
 func init() {
 	cfgFile := "lunar.yml"
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./lunar.yml)")
+	rootCmd.AddCommand(initCmd)
 }
