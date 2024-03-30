@@ -14,7 +14,7 @@ type User struct {
 	ID int64 `bun:",pk,autoincrement"`
 }
 
-func ListAllDatabases() {
+func AllDatabases() []string {
 	db := ConnectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
 
 	ctx := context.Background()
@@ -22,7 +22,8 @@ func ListAllDatabases() {
 	if err := db.NewSelect().Column("datname").Model(&databases).Table("pg_database").Where("datistemplate = false").Scan(ctx); err != nil {
 		panic(err)
 	}
-	fmt.Printf("all databases: %v\n\n", databases)
+
+	return databases
 }
 
 func ConnectToDatabase(databaseUrl string) *bun.DB {

@@ -25,13 +25,35 @@ func initializeProject() {
 	}
 
 	fmt.Println("Welcome to Lunar! Let's get started.")
-	internal.ListAllDatabases()
-
-	var database string
-	fmt.Print("Enter a database name: ")
-	fmt.Scanln(&database)
-
-	internal.StoreConfig(database)
+	config := internal.Config{}
+	config.DatabaseUrl = askForDatabaseUrl()
+	config.DatabaseName = askForDatabaseName()
+	internal.CreateConfigFile(&config, internal.CONFIG_PATH)
 
 	fmt.Println("Intialization complete. You may now run 'lunar snapshot production' to create a snapshot of your database.")
+}
+
+func askForDatabaseUrl() string {
+	fmt.Println("Please enter the connection URL to your PostgreSQL database.")
+	fmt.Println("Example: postgres://localhost:5432/")
+
+	var databaseUrl string
+	fmt.Print("\nPostgreSQL URL: ")
+	fmt.Scanln(&databaseUrl)
+
+	return databaseUrl
+}
+
+func askForDatabaseName() string {
+	fmt.Println("Please enter the name of the database you want to snapshot.")
+
+	fmt.Println("")
+	fmt.Println(internal.AllDatabases())
+	fmt.Println("")
+
+	var databaseName string
+	fmt.Print("Database name: ")
+	fmt.Scanln(&databaseName)
+
+	return databaseName
 }

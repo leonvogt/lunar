@@ -11,7 +11,18 @@ const (
 )
 
 type Config struct {
-	Database string `yaml:"database"`
+	DatabaseUrl  string `yaml:"database_url"`
+	DatabaseName string `yaml:"database"`
+}
+
+func CreateConfigFile(config *Config, path string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return yaml.NewEncoder(file).Encode(config)
 }
 
 func ReadConfig() (*Config, error) {
@@ -29,26 +40,6 @@ func ReadConfig() (*Config, error) {
 	}
 
 	return config, nil
-}
-
-func WriteConfig(config *Config, path string) error {
-	// Create a new file
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	return yaml.NewEncoder(file).Encode(config)
-}
-
-func StoreConfig(database string) {
-	config := &Config{}
-	config.Database = database
-	configPath := CONFIG_PATH
-	if err := WriteConfig(config, configPath); err != nil {
-		panic(err)
-	}
 }
 
 func DoesConfigExist() bool {
