@@ -3,16 +3,11 @@ package internal
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 )
-
-type User struct {
-	ID int64 `bun:",pk,autoincrement"`
-}
 
 func AllDatabases() []string {
 	db := ConnectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
@@ -32,23 +27,12 @@ func ConnectToDatabase(databaseUrl string) *bun.DB {
 	return db
 }
 
-func ConnectToDatabaseAndQuery(database string) {
-	db := ConnectToDatabase(fmt.Sprintf("postgres://postgres:@localhost:5432/%s?sslmode=disable", database))
-
-	// Sample query
-	users := make([]User, 0)
-	ctx := context.Background()
-	if err := db.NewSelect().Model(&users).OrderExpr("id ASC").Scan(ctx); err != nil {
-		panic(err)
-	}
-	fmt.Printf("all users: %v\n\n", users)
-}
-
-func CreateSnapshot() {
+func CreateSnapshot(databaseName, snapshotName string) {
 	db := ConnectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
 
+	snapshotName = "lunar_snapshot_" + databaseName + "_" + snapshotName
 	ctx := context.Background()
-	if _, err := db.Exec("CREATE DATABASE snapshot_template1 TEMPLATE dev_box_development", ctx); err != nil {
+	if _, err := db.Exec("CREATE DATABASE "+snapshotName+" TEMPLATE "+databaseName, ctx); err != nil {
 		panic(err)
 	}
 }
@@ -65,7 +49,7 @@ func RestoreSnapshot() {
 	}
 }
 
-func TerminateConnections() {
+func TerminateAllCurrentConnections(databaseName string) {
 	db := ConnectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
 
 	ctx := context.Background()
