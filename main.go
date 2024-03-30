@@ -7,13 +7,16 @@ import (
 )
 
 func main() {
-	config, err := internal.ReadConfig()
-	if err != nil {
-		startOnboarding()
-		config, _ = internal.ReadConfig()
-	}
+	// config, err := internal.ReadConfig()
+	// if err != nil {
+	// 	startOnboarding()
+	// 	config, _ = internal.ReadConfig()
+	// }
 
-	internal.ConnectToDatabaseAndQuery(config.Database)
+	// internal.ConnectToDatabaseAndQuery()
+	// internal.CreateSnapshot()
+	internal.TerminateConnections()
+	internal.RestoreSnapshot()
 }
 
 func startOnboarding() {

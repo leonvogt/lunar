@@ -42,3 +42,33 @@ func ConnectToDatabaseAndQuery(database string) {
 	}
 	fmt.Printf("all users: %v\n\n", users)
 }
+
+func CreateSnapshot() {
+	db := ConnectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
+
+	ctx := context.Background()
+	if _, err := db.Exec("CREATE DATABASE snapshot_template1 TEMPLATE dev_box_development", ctx); err != nil {
+		panic(err)
+	}
+}
+
+func RestoreSnapshot() {
+	db := ConnectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
+
+	ctx := context.Background()
+	if _, err := db.Exec("DROP DATABASE IF EXISTS dev_box_development", ctx); err != nil {
+		panic(err)
+	}
+	if _, err := db.Exec("CREATE DATABASE dev_box_development TEMPLATE snapshot_template1", ctx); err != nil {
+		panic(err)
+	}
+}
+
+func TerminateConnections() {
+	db := ConnectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
+
+	ctx := context.Background()
+	if _, err := db.Exec("SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = 'dev_box_development' AND pid <> pg_backend_pid()", ctx); err != nil {
+		panic(err)
+	}
+}
