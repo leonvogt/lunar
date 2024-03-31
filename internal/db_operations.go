@@ -10,7 +10,7 @@ import (
 )
 
 func AllDatabases() []string {
-	db := ConnectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
+	db := ConnectToDatabase()
 
 	ctx := context.Background()
 	databases := make([]string, 0)
@@ -21,14 +21,22 @@ func AllDatabases() []string {
 	return databases
 }
 
-func ConnectToDatabase(databaseUrl string) *bun.DB {
+func ConnectToDatabase() *bun.DB {
+	config, err := ReadConfig()
+	if err != nil {
+		panic(err)
+	}
+
+	databaseUrl := config.DatabaseUrl
+	databaseUrl += "template1?sslmode=disable"
+
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(databaseUrl)))
 	db := bun.NewDB(sqldb, pgdialect.New())
 	return db
 }
 
 func CreateSnapshot(databaseName, snapshotName string) {
-	db := ConnectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
+	db := ConnectToDatabase()
 
 	ctx := context.Background()
 	if _, err := db.Exec("CREATE DATABASE "+snapshotName+" TEMPLATE "+databaseName, ctx); err != nil {
@@ -37,7 +45,7 @@ func CreateSnapshot(databaseName, snapshotName string) {
 }
 
 func RestoreSnapshot(databaseName, snapshotName string) {
-	db := ConnectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
+	db := ConnectToDatabase()
 
 	ctx := context.Background()
 	if _, err := db.Exec("DROP DATABASE IF EXISTS "+databaseName, ctx); err != nil {
@@ -49,7 +57,7 @@ func RestoreSnapshot(databaseName, snapshotName string) {
 }
 
 func TerminateAllCurrentConnections(databaseName string) {
-	db := ConnectToDatabase("postgres://postgres:@localhost:5432/template1?sslmode=disable")
+	db := ConnectToDatabase()
 
 	ctx := context.Background()
 	if _, err := db.Exec("SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '"+databaseName+"' AND pid <> pg_backend_pid()", ctx); err != nil {
