@@ -3,6 +3,8 @@ package tests
 import (
 	"os/exec"
 	"testing"
+
+	"github.com/leonvogt/lunar/internal"
 )
 
 func TestSnapshot(t *testing.T) {
@@ -18,5 +20,5 @@ func TestSnapshot(t *testing.T) {
 		t.Errorf("Database does not exist")
 	}
 
-	DropDatabase("lunar_snapshot_lunar_test_production")
+	DropDatabase("lunar_snapshot_lunar_test_production", internal.ConnectToDatabase())
 }
