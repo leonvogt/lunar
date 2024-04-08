@@ -17,6 +17,7 @@ func AllDatabases() []string {
 	if err := db.NewSelect().Column("datname").Model(&databases).Table("pg_database").Where("datistemplate = false").Scan(ctx); err != nil {
 		panic(err)
 	}
+	db.Close()
 
 	return databases
 }
@@ -54,6 +55,7 @@ func CreateSnapshot(databaseName, snapshotName string) {
 	if _, err := db.Exec("CREATE DATABASE "+snapshotName+" TEMPLATE "+databaseName, ctx); err != nil {
 		panic(err)
 	}
+	db.Close()
 }
 
 func RestoreSnapshot(databaseName, snapshotName string) {
@@ -66,6 +68,7 @@ func RestoreSnapshot(databaseName, snapshotName string) {
 	if _, err := db.Exec("CREATE DATABASE "+databaseName+" TEMPLATE "+snapshotName, ctx); err != nil {
 		panic(err)
 	}
+	db.Close()
 }
 
 func TerminateAllCurrentConnections(databaseName string) {
@@ -75,4 +78,5 @@ func TerminateAllCurrentConnections(databaseName string) {
 	if _, err := db.Exec("SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '"+databaseName+"' AND pid <> pg_backend_pid()", ctx); err != nil {
 		panic(err)
 	}
+	db.Close()
 }
