@@ -48,6 +48,6 @@ func TestRestore(t *testing.T) {
 
 	// Cleanup
 	db = internal.ConnectToTemplateDatabase()
-	DropDatabase("lunar_snapshot_lunar_test_production", db)
+	DropDatabase("lunar_snapshot__lunar_test__production", db)
 	db.Close()
 }

@@ -23,5 +23,6 @@ func Execute() {
 func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(snapshotCmd)
+	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(restoreCmd)
 }

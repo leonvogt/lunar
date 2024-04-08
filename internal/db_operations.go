@@ -22,6 +22,17 @@ func AllDatabases() []string {
 	return databases
 }
 
+func AllSnapshotDatabases() []string {
+	databases := AllDatabases()
+	snapshotDatabases := make([]string, 0)
+	for _, database := range databases {
+		if len(database) >= 16 && database[:16] == "lunar_snapshot__" {
+			snapshotDatabases = append(snapshotDatabases, database)
+		}
+	}
+	return snapshotDatabases
+}
+
 func ConnectToDatabase(databaseName string) *bun.DB {
 	config, err := ReadConfig()
 	if err != nil {
