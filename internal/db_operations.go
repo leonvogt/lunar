@@ -10,7 +10,7 @@ import (
 )
 
 func AllDatabases() []string {
-	db := ConnectToDatabase()
+	db := ConnectToTemplateDatabase()
 
 	ctx := context.Background()
 	databases := make([]string, 0)
@@ -21,22 +21,34 @@ func AllDatabases() []string {
 	return databases
 }
 
-func ConnectToDatabase() *bun.DB {
+func ConnectToDatabase(databaseName string) *bun.DB {
 	config, err := ReadConfig()
 	if err != nil {
 		panic(err)
 	}
 
 	databaseUrl := config.DatabaseUrl
-	databaseUrl += "template1?sslmode=disable"
+	if databaseName == "template1" {
+		databaseUrl += "template1?sslmode=disable"
+	} else {
+		databaseUrl += databaseName + "?sslmode=disable"
+	}
 
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(databaseUrl)))
 	db := bun.NewDB(sqldb, pgdialect.New())
 	return db
 }
 
+func ConnectToTemplateDatabase() *bun.DB {
+	return ConnectToDatabase("template1")
+}
+
+func ConnectToDatabaseFromConfig() *bun.DB {
+	return ConnectToDatabase("")
+}
+
 func CreateSnapshot(databaseName, snapshotName string) {
-	db := ConnectToDatabase()
+	db := ConnectToTemplateDatabase()
 
 	ctx := context.Background()
 	if _, err := db.Exec("CREATE DATABASE "+snapshotName+" TEMPLATE "+databaseName, ctx); err != nil {
@@ -45,7 +57,7 @@ func CreateSnapshot(databaseName, snapshotName string) {
 }
 
 func RestoreSnapshot(databaseName, snapshotName string) {
-	db := ConnectToDatabase()
+	db := ConnectToTemplateDatabase()
 
 	ctx := context.Background()
 	if _, err := db.Exec("DROP DATABASE IF EXISTS "+databaseName, ctx); err != nil {
@@ -57,7 +69,7 @@ func RestoreSnapshot(databaseName, snapshotName string) {
 }
 
 func TerminateAllCurrentConnections(databaseName string) {
-	db := ConnectToDatabase()
+	db := ConnectToTemplateDatabase()
 
 	ctx := context.Background()
 	if _, err := db.Exec("SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '"+databaseName+"' AND pid <> pg_backend_pid()", ctx); err != nil {

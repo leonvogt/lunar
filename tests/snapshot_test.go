@@ -17,8 +17,10 @@ func TestSnapshot(t *testing.T) {
 	}
 
 	if !DoesDatabaseExists("lunar_snapshot_lunar_test_production") {
-		t.Errorf("Database does not exist")
+		t.Errorf("Expected database `lunar_snapshot_lunar_test_production` to exist - but it does not")
 	}
 
-	DropDatabase("lunar_snapshot_lunar_test_production", internal.ConnectToDatabase())
+	db := internal.ConnectToTemplateDatabase()
+	DropDatabase("lunar_snapshot_lunar_test_production", db)
+	db.Close()
 }

@@ -9,16 +9,19 @@ import (
 )
 
 func SetupTestDatabase() {
-	db := internal.ConnectToDatabase()
-
+	db := internal.ConnectToTemplateDatabase()
 	DropDatabase("lunar_test", db)
 	CreateDatabase("lunar_test", db)
+	db.Close()
+
+	db = internal.ConnectToDatabase("lunar_test")
 	CreateUsersTable("lunar_test", db)
 	InsertUsers("lunar_test", db)
+	db.Close()
 }
 
 func DoesDatabaseExists(databaseName string) bool {
-	db := internal.ConnectToDatabase()
+	db := internal.ConnectToTemplateDatabase()
 	rows, err := db.Query("SELECT 1 FROM pg_database WHERE datname='"+databaseName+"'", context.Background())
 	if err != nil {
 		panic(err)
@@ -49,7 +52,6 @@ func CreateDatabase(databaseName string, db *bun.DB) {
 }
 
 func CreateUsersTable(databaseName string, db *bun.DB) {
-	fmt.Println("Creating users table")
 	_, err := db.Exec("CREATE TABLE users (id serial PRIMARY KEY, firstname VARCHAR(50), lastname VARCHAR(50), email VARCHAR(100))", context.Background())
 	if err != nil {
 		fmt.Println(err)
