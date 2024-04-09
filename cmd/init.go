@@ -26,8 +26,18 @@ func initializeProject() {
 
 	fmt.Println("Welcome to Lunar! Let's get started.")
 	config := internal.Config{}
-	config.DatabaseUrl = askForDatabaseUrl()
-	config.DatabaseName = askForDatabaseName()
+
+	if databaseUrl == "" {
+		config.DatabaseUrl = askForDatabaseUrl()
+	} else {
+		config.DatabaseUrl = databaseUrl
+	}
+
+	if databaseName == "" {
+		config.DatabaseName = askForDatabaseName()
+	} else {
+		config.DatabaseName = databaseName
+	}
 	internal.CreateConfigFile(&config, internal.CONFIG_PATH)
 
 	fmt.Println("Intialization complete. You may now run 'lunar snapshot production' to create a snapshot of your database.")
