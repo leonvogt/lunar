@@ -10,7 +10,7 @@ import (
 var (
 	initCmd = &cobra.Command{
 		Use:     "init",
-		Aliases: []string{"initialize", "initialise", "create"},
+		Aliases: []string{"initialize", "initialise"},
 		Short:   "Initialize Lunar for the current directory",
 		Run: func(_ *cobra.Command, args []string) {
 			initializeProject()

@@ -9,8 +9,9 @@ import (
 
 var (
 	snapshotCmd = &cobra.Command{
-		Use:   "snapshot",
-		Short: "Create a snapshot of your database",
+		Use:     "snapshot",
+		Aliases: []string{"snap"},
+		Short:   "Create a snapshot of your database",
 		Run: func(_ *cobra.Command, args []string) {
 			createSnapshot(args)
 		},
