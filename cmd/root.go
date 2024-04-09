@@ -26,7 +26,7 @@ func Execute() {
 func init() {
 	rootCmd.AddCommand(initCmd)
 	initCmd.Flags().StringVarP(&databaseUrl, "database-url", "u", "", "The connection URL to your PostgreSQL database.")
-	initCmd.Flags().StringVarP(&databaseName, "database-name", "n", "", "The name of the database you want to snapshot.")
+	initCmd.Flags().StringVarP(&databaseName, "database-name", "d", "", "The name of the database you want to snapshot.")
 
 	rootCmd.AddCommand(snapshotCmd)
 	rootCmd.AddCommand(listCmd)
