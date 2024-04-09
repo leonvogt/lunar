@@ -7,7 +7,7 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "Lunar",
+	Use:     "lunar",
 	Version: "0.0.1",
 	Short:   "A database snapshot tool for PostgreSQL databases.",
 	Long:    "Use Lunar to create and restore database snapshots for PostgreSQL databases. \nRun 'lunar --help' for more information.",
