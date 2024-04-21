@@ -1,23 +1,30 @@
 package internal
 
 import (
-	"context"
 	"database/sql"
 
-	"github.com/uptrace/bun"
-	"github.com/uptrace/bun/dialect/pgdialect"
-	"github.com/uptrace/bun/driver/pgdriver"
+	_ "github.com/lib/pq"
 )
 
 func AllDatabases() []string {
 	db := ConnectToTemplateDatabase()
 
-	ctx := context.Background()
 	databases := make([]string, 0)
-	if err := db.NewSelect().Column("datname").Model(&databases).Table("pg_database").Where("datistemplate = false").Scan(ctx); err != nil {
+
+	rows, err := db.Query("SELECT datname FROM pg_database WHERE datistemplate = false")
+	if err != nil {
 		panic(err)
 	}
 	db.Close()
+
+	for rows.Next() {
+		var database string
+		err := rows.Scan(&database)
+		if err != nil {
+			panic(err)
+		}
+		databases = append(databases, database)
+	}
 
 	return databases
 }
@@ -33,7 +40,7 @@ func AllSnapshotDatabases() []string {
 	return snapshotDatabases
 }
 
-func ConnectToDatabase(databaseName string) *bun.DB {
+func ConnectToDatabase(databaseName string) *sql.DB {
 	config, err := ReadConfig()
 	if err != nil {
 		panic(err)
@@ -46,24 +53,26 @@ func ConnectToDatabase(databaseName string) *bun.DB {
 		databaseUrl += databaseName + "?sslmode=disable"
 	}
 
-	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(databaseUrl)))
-	db := bun.NewDB(sqldb, pgdialect.New())
+	db, err := sql.Open("postgres", databaseUrl)
+	if err != nil {
+		panic(err)
+	}
+
 	return db
 }
 
-func ConnectToTemplateDatabase() *bun.DB {
+func ConnectToTemplateDatabase() *sql.DB {
 	return ConnectToDatabase("template1")
 }
 
-func ConnectToDatabaseFromConfig() *bun.DB {
+func ConnectToDatabaseFromConfig() *sql.DB {
 	return ConnectToDatabase("")
 }
 
 func CreateSnapshot(databaseName, snapshotName string) {
 	db := ConnectToTemplateDatabase()
 
-	ctx := context.Background()
-	if _, err := db.Exec("CREATE DATABASE "+snapshotName+" TEMPLATE "+databaseName, ctx); err != nil {
+	if _, err := db.Exec("CREATE DATABASE " + snapshotName + " TEMPLATE " + databaseName); err != nil {
 		panic(err)
 	}
 	db.Close()
@@ -71,22 +80,24 @@ func CreateSnapshot(databaseName, snapshotName string) {
 
 func RestoreSnapshot(databaseName, snapshotName string) {
 	db := ConnectToTemplateDatabase()
+	defer db.Close()
 
-	ctx := context.Background()
-	if _, err := db.Exec("DROP DATABASE IF EXISTS "+databaseName, ctx); err != nil {
+	_, err := db.Query("DROP DATABASE IF EXISTS " + databaseName)
+	if err != nil {
 		panic(err)
 	}
-	if _, err := db.Exec("CREATE DATABASE "+databaseName+" TEMPLATE "+snapshotName, ctx); err != nil {
+
+	_, err = db.Query("CREATE DATABASE " + databaseName + " TEMPLATE " + snapshotName)
+	if err != nil {
 		panic(err)
 	}
-	db.Close()
 }
 
 func TerminateAllCurrentConnections(databaseName string) {
 	db := ConnectToTemplateDatabase()
 
-	ctx := context.Background()
-	if _, err := db.Exec("SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '"+databaseName+"' AND pid <> pg_backend_pid()", ctx); err != nil {
+	_, err := db.Exec("SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '" + databaseName + "' AND pid <> pg_backend_pid()")
+	if err != nil {
 		panic(err)
 	}
 	db.Close()

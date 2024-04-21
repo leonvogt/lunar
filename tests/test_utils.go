@@ -1,71 +1,69 @@
 package tests
 
 import (
-	"context"
+	"database/sql"
 	"fmt"
+	"log"
 
 	"github.com/leonvogt/lunar/internal"
-	"github.com/uptrace/bun"
 )
 
 func SetupTestDatabase() {
-	db := internal.ConnectToTemplateDatabase()
-	DropDatabase("lunar_test", db)
-	CreateDatabase("lunar_test", db)
-	db.Close()
+	DropDatabase("lunar_test")
+	CreateDatabase("lunar_test")
 
-	db = internal.ConnectToDatabase("lunar_test")
+	db := internal.ConnectToDatabase("lunar_test")
+	defer db.Close()
 	CreateUsersTable("lunar_test", db)
 	InsertUsers("lunar_test", db)
-	db.Close()
 }
 
 func DoesDatabaseExists(databaseName string) bool {
 	db := internal.ConnectToTemplateDatabase()
-	rows, err := db.Query("SELECT 1 FROM pg_database WHERE datname='"+databaseName+"'", context.Background())
+	// SELECT 1 FROM pg_database WHERE datname='" + databaseName
+	rows, err := db.Query("SELECT 1 FROM pg_database WHERE datname='" + databaseName + "'")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	defer rows.Close()
 
 	return rows.Next()
 }
 
-func DropDatabase(databaseName string, db *bun.DB) {
-	ctx := context.Background()
+func DropDatabase(databaseName string) {
+	db := internal.ConnectToTemplateDatabase()
 
-	if _, err := db.Exec("SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '"+databaseName+"' AND pid <> pg_backend_pid()", ctx); err != nil {
-		panic(err)
+	_, err := db.Query("DROP DATABASE IF EXISTS " + databaseName)
+	if err != nil {
+		log.Fatal(err)
 	}
+}
 
-	_, err := db.Exec("DROP DATABASE IF EXISTS "+databaseName, ctx)
+func CreateDatabase(databaseName string) {
+	db := internal.ConnectToTemplateDatabase()
+	internal.TerminateAllCurrentConnections("template1")
+
+	_, err := db.Exec("CREATE DATABASE " + databaseName)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func CreateDatabase(databaseName string, db *bun.DB) {
-	_, err := db.Exec("CREATE DATABASE "+databaseName, context.Background())
-	if err != nil {
-		panic(err)
-	}
-}
-
-func CreateUsersTable(databaseName string, db *bun.DB) {
-	_, err := db.Exec("CREATE TABLE users (id serial PRIMARY KEY, firstname VARCHAR(50), lastname VARCHAR(50), email VARCHAR(100))", context.Background())
+func CreateUsersTable(databaseName string, db *sql.DB) {
+	_, err := db.Exec("CREATE TABLE users (id serial PRIMARY KEY, firstname VARCHAR(50), lastname VARCHAR(50), email VARCHAR(100))")
 	if err != nil {
 		fmt.Println(err)
 	}
 }
 
-func InsertUser(databaseName string, firstname, lastname, email string, db *bun.DB) {
-	_, err := db.Exec("INSERT INTO users (firstname, lastname, email) VALUES ('"+firstname+"', '"+lastname+"', '"+email+"')", context.Background())
+func InsertUser(databaseName string, firstname, lastname, email string, db *sql.DB) {
+	_, err := db.Exec("INSERT INTO users (firstname, lastname, email) VALUES ('" + firstname + "', '" + lastname + "', '" + email + "')")
 	if err != nil {
 		fmt.Println(err)
 	}
 }
 
-func InsertUsers(databaseName string, db *bun.DB) {
+func InsertUsers(databaseName string, db *sql.DB) {
 	InsertUser(databaseName, "John", "Doe", "john.doe@example.com", db)
 	InsertUser(databaseName, "Jane", "Smith", "jane.smith@example.com", db)
 	InsertUser(databaseName, "Michael", "Johnson", "michael.johnson@example.com", db)

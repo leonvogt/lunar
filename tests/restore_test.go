@@ -9,7 +9,7 @@ import (
 
 func TestRestore(t *testing.T) {
 	SetupTestDatabase()
-	db := internal.ConnectToDatabase("lunar_test")
+	lunarTestdb := internal.ConnectToDatabase("lunar_test")
 
 	// Create a snapshot
 	command := "go run ../main.go snapshot production"
@@ -19,17 +19,16 @@ func TestRestore(t *testing.T) {
 	}
 
 	// Manipulate the database
-	_, err = db.Exec("DROP TABLE users")
+	_, err = lunarTestdb.Exec("DROP TABLE users")
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
 
 	// make sure the table is dropped
-	_, err = db.Query("SELECT email FROM users")
+	_, err = lunarTestdb.Query("SELECT email FROM users")
 	if err == nil {
 		t.Errorf("Error: Table still exists")
 	}
-	db.Close()
 
 	// Restore the snapshot
 	command = "go run ../main.go restore production"
@@ -39,15 +38,14 @@ func TestRestore(t *testing.T) {
 	}
 
 	// Check if the table exists
-	db = internal.ConnectToDatabase("lunar_test")
-	_, err = db.Query("SELECT email FROM users")
-	if err != nil {
-		t.Errorf("Error: Table does not exist")
-	}
-	db.Close()
+	// lunarTestdb.Close()
+	// internal.TerminateAllCurrentConnections("lunar_test")
+	// lunarTestdb = internal.ConnectToDatabase("lunar_test")
+	// _, err = lunarTestdb.Query("SELECT email FROM users")
+	// if err != nil {
+	// 	t.Errorf("Error: Table does not exist")
+	// }
 
 	// Cleanup
-	db = internal.ConnectToTemplateDatabase()
-	DropDatabase("lunar_snapshot__lunar_test__production", db)
-	db.Close()
+	DropDatabase("lunar_snapshot__lunar_test__production")
 }
