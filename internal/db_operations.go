@@ -79,15 +79,22 @@ func CreateSnapshot(databaseName, snapshotName string) {
 }
 
 func RestoreSnapshot(databaseName, snapshotName string) {
+	DropDatabase(databaseName)
+
+	db := ConnectToTemplateDatabase()
+	defer db.Close()
+
+	_, err := db.Query("CREATE DATABASE " + databaseName + " TEMPLATE " + snapshotName)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func DropDatabase(databaseName string) {
 	db := ConnectToTemplateDatabase()
 	defer db.Close()
 
 	_, err := db.Query("DROP DATABASE IF EXISTS " + databaseName)
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = db.Query("CREATE DATABASE " + databaseName + " TEMPLATE " + snapshotName)
 	if err != nil {
 		panic(err)
 	}
