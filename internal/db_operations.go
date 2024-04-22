@@ -90,6 +90,17 @@ func RestoreSnapshot(databaseName, snapshotName string) {
 	}
 }
 
+func CreateDatabase(databaseName string) {
+	TerminateAllCurrentConnections("template1")
+	db := ConnectToTemplateDatabase()
+	defer db.Close()
+
+	_, err := db.Exec("CREATE DATABASE " + databaseName)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func DropDatabase(databaseName string) {
 	db := ConnectToTemplateDatabase()
 	defer db.Close()

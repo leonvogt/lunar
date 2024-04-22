@@ -3,6 +3,8 @@ package tests
 import (
 	"os/exec"
 	"testing"
+
+	"github.com/leonvogt/lunar/internal"
 )
 
 func TestSnapshotList(t *testing.T) {
@@ -24,5 +26,5 @@ func TestSnapshotList(t *testing.T) {
 		t.Errorf("Expected output to be 'production' but got '%s'", string(out))
 	}
 
-	DropDatabase("lunar_snapshot__lunar_test__production")
+	internal.DropDatabase("lunar_snapshot__lunar_test__production")
 }

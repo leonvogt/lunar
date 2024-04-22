@@ -47,5 +47,5 @@ func TestRestore(t *testing.T) {
 	// }
 
 	// Cleanup
-	DropDatabase("lunar_snapshot__lunar_test__production")
+	internal.DropDatabase("lunar_snapshot__lunar_test__production")
 }
