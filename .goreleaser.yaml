@@ -34,7 +34,7 @@ brews:
   -
     license: "MIT"
     homepage: "https://github.com/leonvogt/lunar"
-    description: "A database snapshot tool for PostgreSQL databases."
+    description: "Database snapshot tool for PostgreSQL databases"
     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
     repository:
       owner: leonvogt
