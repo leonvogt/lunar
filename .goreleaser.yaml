@@ -32,6 +32,7 @@ changelog:
 
 brews:
   -
+    name: lunar-db
     license: "MIT"
     homepage: "https://github.com/leonvogt/lunar"
     description: "Database snapshot tool for PostgreSQL databases"
