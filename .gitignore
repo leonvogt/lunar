@@ -16,3 +16,5 @@ go.work
 
 # Lunar specific
 /lunar.yml
+
+dist/
