@@ -29,3 +29,16 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
+
+brews:
+  -
+    homepage: "https://github.com/leonvogt/lunar"
+    description: "A database snapshot tool for PostgreSQL databases."
+    license: "MIT"
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    repository:
+      owner: leonvogt
+      name: homebrew-tap
+      pull_request:
+        enabled: true
+        draft: false
