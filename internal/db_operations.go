@@ -6,9 +6,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-func AllDatabases() []string {
-	db := ConnectToTemplateDatabase()
-
+func AllDatabases(db *sql.DB) []string {
 	databases := make([]string, 0)
 
 	rows, err := db.Query("SELECT datname FROM pg_database WHERE datistemplate = false")
@@ -30,7 +28,8 @@ func AllDatabases() []string {
 }
 
 func AllSnapshotDatabases() []string {
-	databases := AllDatabases()
+	db := ConnectToTemplateDatabase()
+	databases := AllDatabases(db)
 	snapshotDatabases := make([]string, 0)
 	for _, database := range databases {
 		if len(database) >= 16 && database[:16] == "lunar_snapshot__" {
@@ -53,6 +52,10 @@ func ConnectToDatabase(databaseName string) *sql.DB {
 		databaseUrl += databaseName + "?sslmode=disable"
 	}
 
+	return OpenDatabaseConnection(databaseUrl)
+}
+
+func OpenDatabaseConnection(databaseUrl string) *sql.DB {
 	db, err := sql.Open("postgres", databaseUrl)
 	if err != nil {
 		panic(err)

@@ -34,7 +34,8 @@ func initializeProject() {
 	}
 
 	if databaseNameFlag == "" {
-		config.DatabaseName = askForDatabaseName()
+		defaultTemplateUrl := config.DatabaseUrl + "template1?sslmode=disable"
+		config.DatabaseName = askForDatabaseName(defaultTemplateUrl)
 	} else {
 		config.DatabaseName = databaseNameFlag
 	}
@@ -47,7 +48,7 @@ func askForDatabaseUrl() string {
 	fmt.Println("Please enter the connection URL to your PostgreSQL database.")
 
 	var databaseUrl string
-	fmt.Print("\nPostgreSQL URL: [postgres://localhost:5432/]")
+	fmt.Print("\nPostgreSQL URL [postgres://localhost:5432/]: ")
 	fmt.Scanln(&databaseUrl)
 
 	if databaseUrl == "" {
@@ -57,11 +58,11 @@ func askForDatabaseUrl() string {
 	return databaseUrl
 }
 
-func askForDatabaseName() string {
+func askForDatabaseName(databaseUrl string) string {
 	fmt.Println("Please enter the name of the database you want to snapshot.")
 
 	fmt.Println("")
-	fmt.Println(internal.AllDatabases())
+	fmt.Println(internal.AllDatabases(internal.OpenDatabaseConnection(databaseUrl)))
 	fmt.Println("")
 
 	var databaseName string
