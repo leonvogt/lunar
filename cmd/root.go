@@ -6,8 +6,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var databaseUrl string
-var databaseName string
+var databaseUrlFlag string
+var databaseNameFlag string
 
 var rootCmd = &cobra.Command{
 	Use:     "lunar",
@@ -25,8 +25,8 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(initCmd)
-	initCmd.Flags().StringVarP(&databaseUrl, "database-url", "u", "", "The connection URL to your PostgreSQL database.")
-	initCmd.Flags().StringVarP(&databaseName, "database-name", "d", "", "The name of the database you want to snapshot.")
+	initCmd.Flags().StringVarP(&databaseUrlFlag, "database-url", "u", "", "The connection URL to your PostgreSQL database.")
+	initCmd.Flags().StringVarP(&databaseNameFlag, "database-name", "d", "", "The name of the database you want to snapshot.")
 
 	rootCmd.AddCommand(snapshotCmd)
 	rootCmd.AddCommand(listCmd)

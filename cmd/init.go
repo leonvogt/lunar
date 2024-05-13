@@ -27,16 +27,16 @@ func initializeProject() {
 	fmt.Println("Welcome to Lunar! Let's get started.")
 	config := internal.Config{}
 
-	if databaseUrl == "" {
+	if databaseUrlFlag == "" {
 		config.DatabaseUrl = askForDatabaseUrl()
 	} else {
-		config.DatabaseUrl = databaseUrl
+		config.DatabaseUrl = databaseUrlFlag
 	}
 
-	if databaseName == "" {
+	if databaseNameFlag == "" {
 		config.DatabaseName = askForDatabaseName()
 	} else {
-		config.DatabaseName = databaseName
+		config.DatabaseName = databaseNameFlag
 	}
 	internal.CreateConfigFile(&config, internal.CONFIG_PATH)
 
