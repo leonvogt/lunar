@@ -2,6 +2,7 @@ package internal
 
 import (
 	"database/sql"
+	"log"
 
 	_ "github.com/lib/pq"
 )
@@ -91,6 +92,18 @@ func RestoreSnapshot(databaseName, snapshotName string) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func DoesDatabaseExists(databaseName string) bool {
+	db := ConnectToTemplateDatabase()
+
+	rows, err := db.Query("SELECT 1 FROM pg_database WHERE datname='" + databaseName + "'")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	return rows.Next()
 }
 
 func CreateDatabase(databaseName string) {

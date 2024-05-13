@@ -3,6 +3,8 @@ package tests
 import (
 	"os/exec"
 	"testing"
+
+	"github.com/leonvogt/lunar/internal"
 )
 
 func TestRemove(t *testing.T) {
@@ -15,7 +17,7 @@ func TestRemove(t *testing.T) {
 		t.Errorf("Error: %v", err)
 	}
 
-	if !DoesDatabaseExists("lunar_snapshot__lunar_test__production") {
+	if !internal.DoesDatabaseExists("lunar_snapshot__lunar_test__production") {
 		t.Errorf("Expected database `lunar_snapshot__lunar_test__production` to exist - but it does not")
 	}
 
@@ -26,7 +28,7 @@ func TestRemove(t *testing.T) {
 		t.Errorf("Error: %v", err)
 	}
 
-	if DoesDatabaseExists("lunar_snapshot__lunar_test__production") {
+	if internal.DoesDatabaseExists("lunar_snapshot__lunar_test__production") {
 		t.Errorf("Expected database `lunar_snapshot__lunar_test__production` to not exist - but it does")
 	}
 }

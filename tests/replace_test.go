@@ -17,7 +17,7 @@ func TestReplace(t *testing.T) {
 		t.Errorf("Error: %v", err)
 	}
 
-	if !DoesDatabaseExists("lunar_snapshot__lunar_test__production") {
+	if !internal.DoesDatabaseExists("lunar_snapshot__lunar_test__production") {
 		t.Errorf("Expected database `lunar_snapshot__lunar_test__production` to exist - but it does not")
 	}
 

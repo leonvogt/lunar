@@ -3,7 +3,6 @@ package tests
 import (
 	"database/sql"
 	"fmt"
-	"log"
 
 	"github.com/leonvogt/lunar/internal"
 )
@@ -16,18 +15,6 @@ func SetupTestDatabase() {
 	defer db.Close()
 	CreateUsersTable("lunar_test", db)
 	InsertUsers("lunar_test", db)
-}
-
-func DoesDatabaseExists(databaseName string) bool {
-	db := internal.ConnectToTemplateDatabase()
-
-	rows, err := db.Query("SELECT 1 FROM pg_database WHERE datname='" + databaseName + "'")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer rows.Close()
-
-	return rows.Next()
 }
 
 func CreateUsersTable(databaseName string, db *sql.DB) {

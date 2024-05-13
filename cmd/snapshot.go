@@ -20,18 +20,24 @@ var (
 
 func createSnapshot(args []string) {
 	if !internal.DoesConfigExist() {
-		fmt.Println("There seems to be no configuration file. Please run 'lunar init' first.")
+		fmt.Println("There seems to be no configuration file. Please run 'lunar init' first")
 		return
 	}
 
 	if len(args) != 1 {
-		fmt.Println("Please provide a name for the snapshot.")
+		fmt.Println("Please provide a name for the snapshot")
 		return
 	}
 
 	snapshotName := args[0]
 	config, _ := internal.ReadConfig()
 	snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
+
+	if internal.DoesDatabaseExists(snapshotDatabaseName) {
+		fmt.Println("Snapshot with name", snapshotName, "already exists")
+		return
+	}
+
 	fmt.Println("Creating snapshot for database", config.DatabaseName, "with name", snapshotName)
 
 	internal.TerminateAllCurrentConnections(config.DatabaseName)
