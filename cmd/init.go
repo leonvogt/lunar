@@ -45,11 +45,14 @@ func initializeProject() {
 
 func askForDatabaseUrl() string {
 	fmt.Println("Please enter the connection URL to your PostgreSQL database.")
-	fmt.Println("Example: postgres://localhost:5432/")
 
 	var databaseUrl string
-	fmt.Print("\nPostgreSQL URL: ")
+	fmt.Print("\nPostgreSQL URL: [postgres://localhost:5432/]")
 	fmt.Scanln(&databaseUrl)
+
+	if databaseUrl == "" {
+		databaseUrl = "postgres://localhost:5432/"
+	}
 
 	return databaseUrl
 }
