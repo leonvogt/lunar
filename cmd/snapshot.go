@@ -38,7 +38,9 @@ func createSnapshot(args []string) {
 		return
 	}
 
-	fmt.Println("Creating snapshot for database", config.DatabaseName, "with name", snapshotName)
+	message := fmt.Sprintf("Creating a snapshot for the database %s", config.DatabaseName)
+	stopSpinner := StartSpinner(message)
+	defer stopSpinner()
 
 	internal.TerminateAllCurrentConnections(config.DatabaseName)
 	internal.TerminateAllCurrentConnections(snapshotDatabaseName)

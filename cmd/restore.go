@@ -31,7 +31,10 @@ func restoreSnapshot(args []string) {
 	snapshotName := args[0]
 	config, _ := internal.ReadConfig()
 	snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
-	fmt.Println("Restoring snapshot ", snapshotName, " ("+snapshotDatabaseName+") for database ", config.DatabaseName)
+
+	message := fmt.Sprintf("Restoring snapshot %s (%s) for database %s", snapshotName, snapshotDatabaseName, config.DatabaseName)
+	stopSpinner := StartSpinner(message)
+	defer stopSpinner()
 
 	internal.TerminateAllCurrentConnections(config.DatabaseName)
 	internal.TerminateAllCurrentConnections(snapshotDatabaseName)
