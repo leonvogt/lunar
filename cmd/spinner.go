@@ -37,6 +37,7 @@ func (m *spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+
 	default:
 		return m, nil
 	}
@@ -49,18 +50,25 @@ func (m *spinnerModel) View() string {
 	return fmt.Sprintf("\n\n   %s %s\n\n", m.spinner.View(), m.message)
 }
 
-func StartSpinner(message string) func() {
+// StartSpinner runs the spinner in a background goroutine
+func StartSpinner(message string) func() chan bool {
 	m := newSpinnerModel(message)
 	p := tea.NewProgram(m)
 
+	done := make(chan bool)
+
 	go func() {
-		_ = p.Start()
+		if err := p.Start(); err != nil {
+			fmt.Println("Error starting program:", err)
+		}
+		done <- true // Notify when the spinner is finished
+		close(done)  // Close the done channel
 	}()
 
-	// Stop function to end the spinner
-	return func() {
+	// Return the stop function to terminate the spinner
+	return func() chan bool {
 		m.quitting = true
 		p.Quit()
-		<-m.done // Wait for spinner to fully stop
+		return done // Return the channel to wait for completion
 	}
 }

@@ -32,15 +32,21 @@ func replaceSnapshot(args []string) {
 	config, _ := internal.ReadConfig()
 	snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
 
+	// Remove the existing snapshot
 	fmt.Println("Removing snapshot ", snapshotName)
 	internal.TerminateAllCurrentConnections(snapshotDatabaseName)
 	internal.DropDatabase(snapshotDatabaseName)
 
+	// Create a new snapshot
 	message := fmt.Sprintf("Creating a snapshot for the database %s", config.DatabaseName)
 	stopSpinner := StartSpinner(message)
-	defer stopSpinner()
 
 	internal.TerminateAllCurrentConnections(snapshotDatabaseName)
 	internal.TerminateAllCurrentConnections(config.DatabaseName)
 	internal.CreateSnapshot(config.DatabaseName, snapshotDatabaseName)
+
+	done := stopSpinner()
+	<-done
+
+	fmt.Println("Snapshot created successfully")
 }
