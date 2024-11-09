@@ -29,11 +29,10 @@ func (m *spinnerModel) Init() tea.Cmd {
 }
 
 func (m *spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg.(type) {
+	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		m.quitting = true
-		close(m.done)
-		return m, tea.Quit
+		return m, nil
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
