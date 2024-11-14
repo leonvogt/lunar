@@ -82,6 +82,16 @@ func CreateSnapshot(databaseName, snapshotName string) {
 	db.Close()
 }
 
+func CreateSnapshotCopy(snapshotName string) {
+	db := ConnectToTemplateDatabase()
+	snapshotNameCopy := snapshotName + "_copy"
+	DropDatabase(snapshotNameCopy)
+
+	if _, err := db.Exec("CREATE DATABASE " + snapshotNameCopy + " TEMPLATE " + snapshotName); err != nil {
+		panic(err)
+	}
+}
+
 func RestoreSnapshot(databaseName, snapshotName string) {
 	DropDatabase(databaseName)
 
