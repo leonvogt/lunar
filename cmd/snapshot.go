@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/leonvogt/lunar/internal"
 	"github.com/spf13/cobra"
@@ -45,8 +46,13 @@ func createSnapshot(args []string) {
 	internal.TerminateAllCurrentConnections(snapshotDatabaseName)
 	internal.CreateSnapshot(config.DatabaseName, snapshotDatabaseName)
 
-	done := stopSpinner()
-	<-done
+	// Run the snapshot copy in the background
+	go func() {
+		internal.CreateSnapshotCopy(snapshotDatabaseName)
+	}()
+	time.Sleep(2 * time.Second) // Give the Go routine some time to start
+
+	stopSpinner()
 
 	fmt.Println("Snapshot created successfully")
 }

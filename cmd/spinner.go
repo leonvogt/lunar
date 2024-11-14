@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -50,25 +51,22 @@ func (m *spinnerModel) View() string {
 	return fmt.Sprintf("\n\n   %s %s\n\n", m.spinner.View(), m.message)
 }
 
-// StartSpinner runs the spinner in a background goroutine
-func StartSpinner(message string) func() chan bool {
+func StartSpinner(message string) func() {
 	m := newSpinnerModel(message)
 	p := tea.NewProgram(m)
 
-	done := make(chan bool)
+	// Create a cancellable context
+	_, cancel := context.WithCancel(context.Background())
 
+	// Run the spinner in a separate goroutine
 	go func() {
-		if err := p.Start(); err != nil {
-			fmt.Println("Error starting program:", err)
-		}
-		done <- true // Notify when the spinner is finished
-		close(done)  // Close the done channel
+		p.Start()
 	}()
 
-	// Return the stop function to terminate the spinner
-	return func() chan bool {
+	// Return a function to stop the spinner
+	return func() {
 		m.quitting = true
-		p.Quit()
-		return done // Return the channel to wait for completion
+		cancel() // Cancel the context to stop the spinner
+		p.Quit() // Quit the spinner
 	}
 }
