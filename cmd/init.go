@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/erikgeiser/promptkit/selection"
+	"github.com/erikgeiser/promptkit/textinput"
 	"github.com/leonvogt/lunar/internal"
 	"github.com/spf13/cobra"
 )
@@ -25,6 +28,7 @@ func initializeProject() {
 	}
 
 	fmt.Println("Welcome to Lunar! Let's get started.")
+	fmt.Println("")
 	config := internal.Config{}
 
 	if databaseUrlFlag == "" {
@@ -45,29 +49,31 @@ func initializeProject() {
 }
 
 func askForDatabaseUrl() string {
-	fmt.Println("Please enter the connection URL to your PostgreSQL database.")
+	input := textinput.New("PostgreSQL URL")
+	input.InitialValue = "postgres://localhost:5432/"
+	input.Placeholder = "PostgreSQL URL cannot be empty"
 
-	var databaseUrl string
-	fmt.Print("\nPostgreSQL URL [postgres://localhost:5432/]: ")
-	fmt.Scanln(&databaseUrl)
-
-	if databaseUrl == "" {
-		databaseUrl = "postgres://localhost:5432/"
+	databaseUrl, err := input.RunPrompt()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	return databaseUrl
 }
 
 func askForDatabaseName(databaseUrl string) string {
-	fmt.Println("Please enter the name of the database you want to snapshot.")
-
-	fmt.Println("")
-	fmt.Println(internal.AllDatabases(internal.OpenDatabaseConnection(databaseUrl)))
 	fmt.Println("")
 
-	var databaseName string
-	fmt.Print("Database name: ")
-	fmt.Scanln(&databaseName)
+	databaseNames := internal.AllDatabases(internal.OpenDatabaseConnection(databaseUrl))
+	sp := selection.New("Please enter the name of the database you want to snapshot", databaseNames)
+	sp.PageSize = 50
+
+	databaseName, err := sp.RunPrompt()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
 
 	return databaseName
 }
