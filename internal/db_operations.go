@@ -4,10 +4,148 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"time"
 
 	_ "github.com/lib/pq"
 )
+
+var dbDebugLog *log.Logger
+
+func init() {
+	// Create debug log file in /tmp
+	logFile, err := os.OpenFile(filepath.Join(os.TempDir(), "lunar-db-debug.log"),
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("Warning: Could not create db debug log: %v\n", err)
+		return
+	}
+
+	dbDebugLog = log.New(logFile, "", log.LstdFlags)
+}
+
+func logDbDebug(format string, v ...interface{}) {
+	if dbDebugLog != nil {
+		dbDebugLog.Printf(format, v...)
+	}
+}
+
+func CreateSnapshotWithRetry(databaseName, snapshotName string, maxRetries int) error {
+	logDbDebug("Starting CreateSnapshotWithRetry: database=%s snapshot=%s retries=%d",
+		databaseName, snapshotName, maxRetries)
+
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		if err = createSnapshotOnce(databaseName, snapshotName); err == nil {
+			logDbDebug("CreateSnapshotWithRetry succeeded on attempt %d", i+1)
+			return nil
+		}
+		logDbDebug("Attempt %d failed: %v", i+1, err)
+		time.Sleep(time.Second * 2)
+	}
+	return fmt.Errorf("failed to create snapshot after %d attempts: %v", maxRetries, err)
+}
+
+func CreateSnapshotCopyWithRetry(snapshotName string, maxRetries int) error {
+	logDbDebug("Starting CreateSnapshotCopyWithRetry: snapshot=%s retries=%d",
+		snapshotName, maxRetries)
+
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		if err = createSnapshotCopyOnce(snapshotName); err == nil {
+			logDbDebug("CreateSnapshotCopyWithRetry succeeded on attempt %d", i+1)
+			return nil
+		}
+		logDbDebug("Copy attempt %d failed: %v", i+1, err)
+		time.Sleep(time.Second * 2)
+	}
+	return fmt.Errorf("failed to create snapshot copy after %d attempts: %v", maxRetries, err)
+}
+
+func createSnapshotOnce(databaseName, snapshotName string) error {
+	logDbDebug("Starting createSnapshotOnce: database=%s snapshot=%s",
+		databaseName, snapshotName)
+
+	if err := terminateConnections(databaseName); err != nil {
+		logDbDebug("Failed to terminate connections: %v", err)
+		return fmt.Errorf("failed to terminate connections: %v", err)
+	}
+
+	db := ConnectToTemplateDatabase()
+	defer db.Close()
+
+	logDbDebug("Creating snapshot...")
+	_, err := db.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", snapshotName, databaseName))
+	if err != nil {
+		logDbDebug("Failed to create snapshot: %v", err)
+		return fmt.Errorf("failed to create snapshot: %v", err)
+	}
+
+	logDbDebug("Snapshot created successfully")
+	return nil
+}
+
+func createSnapshotCopyOnce(snapshotName string) error {
+	snapshotNameCopy := snapshotName + "_copy"
+	logDbDebug("Starting createSnapshotCopyOnce: snapshot=%s copy=%s",
+		snapshotName, snapshotNameCopy)
+
+	if err := dropDatabaseIfExists(snapshotNameCopy); err != nil {
+		logDbDebug("Failed to drop existing copy: %v", err)
+		return fmt.Errorf("failed to drop existing copy: %v", err)
+	}
+
+	if err := terminateConnections(snapshotName); err != nil {
+		logDbDebug("Failed to terminate connections: %v", err)
+		return fmt.Errorf("failed to terminate connections: %v", err)
+	}
+
+	db := ConnectToTemplateDatabase()
+	defer db.Close()
+
+	logDbDebug("Creating snapshot copy...")
+	_, err := db.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", snapshotNameCopy, snapshotName))
+	if err != nil {
+		logDbDebug("Failed to create snapshot copy: %v", err)
+		return fmt.Errorf("failed to create snapshot copy: %v", err)
+	}
+
+	logDbDebug("Snapshot copy created successfully")
+	return nil
+}
+
+func dropDatabaseIfExists(databaseName string) error {
+	db := ConnectToTemplateDatabase()
+	defer db.Close()
+
+	_, err := db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", databaseName))
+	return err
+}
+
+// Add debug logging to existing functions...
+func terminateConnections(databaseName string) error {
+	logDbDebug("Terminating connections for database: %s", databaseName)
+
+	db := ConnectToTemplateDatabase()
+	defer db.Close()
+
+	query := `
+		SELECT pg_terminate_backend(pid)
+		FROM pg_stat_activity
+		WHERE datname = $1
+		AND pid <> pg_backend_pid()`
+
+	result, err := db.Exec(query, databaseName)
+	if err != nil {
+		logDbDebug("Error terminating connections: %v", err)
+		return err
+	}
+
+	affected, _ := result.RowsAffected()
+	logDbDebug("Terminated %d connections", affected)
+	return nil
+}
 
 func AllDatabases(db *sql.DB) []string {
 	databases := make([]string, 0)
