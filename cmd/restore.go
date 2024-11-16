@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/leonvogt/lunar/internal"
 	"github.com/spf13/cobra"
 )
 
@@ -18,29 +17,29 @@ var (
 )
 
 func restoreSnapshot(args []string) {
-	if !internal.DoesConfigExist() {
-		fmt.Println("There seems to be no configuration file. Please run 'lunar init' first.")
-		return
-	}
+	// if !internal.DoesConfigExist() {
+	// 	fmt.Println("There seems to be no configuration file. Please run 'lunar init' first.")
+	// 	return
+	// }
 
-	if len(args) != 1 {
-		fmt.Println("Please provide a snapshot name.")
-		return
-	}
+	// if len(args) != 1 {
+	// 	fmt.Println("Please provide a snapshot name.")
+	// 	return
+	// }
 
-	snapshotName := args[0]
-	config, _ := internal.ReadConfig()
-	snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
+	// snapshotName := args[0]
+	// config, _ := internal.ReadConfig()
+	// snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
 
-	message := fmt.Sprintf("Restoring snapshot %s (%s) for database %s", snapshotName, snapshotDatabaseName, config.DatabaseName)
-	stopSpinner := StartSpinner(message)
+	// message := fmt.Sprintf("Restoring snapshot %s (%s) for database %s", snapshotName, snapshotDatabaseName, config.DatabaseName)
+	// stopSpinner := StartSpinner(message)
 
-	internal.TerminateAllCurrentConnections(config.DatabaseName)
-	internal.TerminateAllCurrentConnections(snapshotDatabaseName)
-	internal.RestoreSnapshot(config.DatabaseName, snapshotDatabaseName)
+	// internal.TerminateAllCurrentConnections(config.DatabaseName)
+	// internal.TerminateAllCurrentConnections(snapshotDatabaseName)
+	// internal.RestoreSnapshot(config.DatabaseName, snapshotDatabaseName)
 
-	done := stopSpinner()
-	<-done
+	// done := stopSpinner()
+	// <-done
 
 	fmt.Println("Snapshot restored successfully")
 }

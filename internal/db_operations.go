@@ -73,13 +73,20 @@ func ConnectToDatabaseFromConfig() *sql.DB {
 	return ConnectToDatabase("")
 }
 
-func CreateSnapshot(databaseName, snapshotName string) {
-	db := ConnectToTemplateDatabase()
-
-	if _, err := db.Exec("CREATE DATABASE " + snapshotName + " TEMPLATE " + databaseName); err != nil {
-		panic(err)
+func CreateSnapshot(databaseName, snapshotName string) error {
+	if err := TerminateAllCurrentConnections(databaseName); err != nil {
+		return fmt.Errorf("failed to terminate connections: %v", err)
 	}
-	db.Close()
+
+	db := ConnectToTemplateDatabase()
+	defer db.Close()
+
+	_, err := db.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", snapshotName, databaseName))
+	if err != nil {
+		return fmt.Errorf("failed to create snapshot: %v", err)
+	}
+
+	return nil
 }
 
 func RestoreSnapshot(databaseName, snapshotName string) {
@@ -92,6 +99,23 @@ func RestoreSnapshot(databaseName, snapshotName string) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func TerminateAllCurrentConnections(databaseName string) error {
+	db := ConnectToTemplateDatabase()
+	defer db.Close()
+
+	query := `
+		SELECT pg_terminate_backend(pid)
+		FROM pg_stat_activity
+		WHERE datname = $1
+		AND pid <> pg_backend_pid()`
+
+	_, err := db.Exec(query, databaseName)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func DoesDatabaseExists(databaseName string) bool {
@@ -125,16 +149,6 @@ func DropDatabase(databaseName string) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func TerminateAllCurrentConnections(databaseName string) {
-	db := ConnectToTemplateDatabase()
-
-	_, err := db.Exec("SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '" + databaseName + "' AND pid <> pg_backend_pid()")
-	if err != nil {
-		panic(err)
-	}
-	db.Close()
 }
 
 func TestConnection(db *sql.DB) error {
