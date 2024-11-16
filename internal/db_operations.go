@@ -2,7 +2,9 @@ package internal
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -47,16 +49,14 @@ func ConnectToDatabase(databaseName string) *sql.DB {
 	}
 
 	databaseUrl := config.DatabaseUrl
-	if databaseName == "template1" {
-		databaseUrl += "template1?sslmode=disable"
-	} else {
-		databaseUrl += databaseName + "?sslmode=disable"
-	}
-
-	return OpenDatabaseConnection(databaseUrl)
+	return OpenDatabaseConnection(databaseUrl, false)
 }
 
-func OpenDatabaseConnection(databaseUrl string) *sql.DB {
+func OpenDatabaseConnection(databaseUrl string, sslMode bool) *sql.DB {
+	if !sslMode {
+		databaseUrl += "?sslmode=disable"
+	}
+
 	db, err := sql.Open("postgres", databaseUrl)
 	if err != nil {
 		panic(err)
@@ -135,4 +135,15 @@ func TerminateAllCurrentConnections(databaseName string) {
 		panic(err)
 	}
 	db.Close()
+}
+
+func TestConnection(db *sql.DB) error {
+	db.SetConnMaxLifetime(5 * time.Second)
+
+	err := db.Ping()
+	if err != nil {
+		return fmt.Errorf("failed to connect to database: %v", err)
+	}
+
+	return nil
 }

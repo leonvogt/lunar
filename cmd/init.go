@@ -37,8 +37,16 @@ func initializeProject() {
 		config.DatabaseUrl = databaseUrlFlag
 	}
 
+	// Test the connection
+	db := internal.OpenDatabaseConnection(config.DatabaseUrl, false)
+	defer db.Close()
+	if err := internal.TestConnection(db); err != nil {
+		fmt.Printf("Could not connect to PostgreSQL with the URL %s. Error: %v\n", config.DatabaseUrl, err)
+		return
+	}
+
 	if databaseNameFlag == "" {
-		defaultTemplateUrl := config.DatabaseUrl + "template1?sslmode=disable"
+		defaultTemplateUrl := config.DatabaseUrl + "template1"
 		config.DatabaseName = askForDatabaseName(defaultTemplateUrl)
 	} else {
 		config.DatabaseName = databaseNameFlag
@@ -65,7 +73,7 @@ func askForDatabaseUrl() string {
 func askForDatabaseName(databaseUrl string) string {
 	fmt.Println("")
 
-	databaseNames := internal.AllDatabases(internal.OpenDatabaseConnection(databaseUrl))
+	databaseNames := internal.AllDatabases(internal.OpenDatabaseConnection(databaseUrl, false))
 	sp := selection.New("Please enter the name of the database you want to snapshot", databaseNames)
 	sp.PageSize = 50
 
