@@ -2,30 +2,17 @@ package cmd
 
 import (
 	"fmt"
-	"log"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/leonvogt/lunar/internal"
 	"github.com/spf13/cobra"
 )
 
-var debugLog *log.Logger
-
 func init() {
-	logFile, err := os.OpenFile(filepath.Join(os.TempDir(), "lunar-debug.log"),
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		fmt.Printf("Warning: Could not create debug log: %v\n", err)
-		return
-	}
-
-	debugLog = log.New(logFile, "", log.LstdFlags)
 	rootCmd.AddCommand(snapshotCmd)
 }
 
-var snapshotManager, _ = internal.NewSnapshotManager(debugLog)
+var snapshotManager, _ = internal.NewSnapshotManager()
 
 var snapshotCmd = &cobra.Command{
 	Use:     "snapshot",
@@ -86,7 +73,6 @@ func createSnapshot(args []string) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				debugLog.Printf("Panic in background copy: %v", r)
 				copyErr = fmt.Errorf("panic in background copy: %v", r)
 			}
 			snapshotManager.FinishSnapshot(snapshotName)
@@ -94,7 +80,6 @@ func createSnapshot(args []string) {
 		}()
 
 		if err := internal.CreateSnapshotCopyWithRetry(snapshotDatabaseName, 3); err != nil {
-			debugLog.Printf("Error in background copy: %v", err)
 			copyErr = err
 			return
 		}
@@ -111,5 +96,5 @@ func createSnapshot(args []string) {
 	}
 
 	stopSpinner()
-	fmt.Println("Initial snapshot created successfully. Secondary copy is being created in the background.")
+	fmt.Println("Snapshot created successfully")
 }

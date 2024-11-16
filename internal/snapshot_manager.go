@@ -5,17 +5,15 @@ import (
 	"database/sql"
 	"fmt"
 	"hash/crc32"
-	"log"
 	"time"
 )
 
 // Manager handles database snapshot operations and locking
 type Manager struct {
 	dbConnection *sql.DB
-	logger       *log.Logger
 }
 
-func NewSnapshotManager(logger *log.Logger) (*Manager, error) {
+func NewSnapshotManager() (*Manager, error) {
 	// Connect to postgres database
 	db, err := sql.Open("postgres", "postgres://localhost:5432/postgres?sslmode=disable")
 	if err != nil {
@@ -24,19 +22,12 @@ func NewSnapshotManager(logger *log.Logger) (*Manager, error) {
 
 	return &Manager{
 		dbConnection: db,
-		logger:       logger,
 	}, nil
 }
 
 // Close closes the database connection
 func (m *Manager) Close() error {
 	return m.dbConnection.Close()
-}
-
-func (m *Manager) logDebug(format string, v ...interface{}) {
-	if m.logger != nil {
-		m.logger.Printf(format, v...)
-	}
 }
 
 // IsSnapshotInProgress checks if a snapshot operation is currently running
@@ -46,14 +37,15 @@ func (m *Manager) IsSnapshotInProgress(snapshotName string) bool {
 	var locked bool
 	err := m.dbConnection.QueryRow("SELECT pg_try_advisory_lock($1)", lockID).Scan(&locked)
 	if err != nil {
-		m.logDebug("Error checking advisory lock: %v", err)
+		fmt.Printf("Error checking advisory lock: %v", err)
 		return true
 	}
 
 	if locked {
+		// Release the lock
 		_, err := m.dbConnection.Exec("SELECT pg_advisory_unlock($1)", lockID)
 		if err != nil {
-			m.logDebug("Error releasing advisory lock: %v", err)
+			fmt.Printf("Error releasing advisory lock: %v", err)
 		}
 		return false
 	}
@@ -61,7 +53,7 @@ func (m *Manager) IsSnapshotInProgress(snapshotName string) bool {
 	return true
 }
 
-// StartSnapshot attempts to start a new snapshot operation
+// Creates an advisory lock for the snapshot
 func (m *Manager) StartSnapshot(snapshotName string) error {
 	lockID := int64(crc32.ChecksumIEEE([]byte(snapshotName)))
 
@@ -73,17 +65,17 @@ func (m *Manager) StartSnapshot(snapshotName string) error {
 	return nil
 }
 
-// FinishSnapshot marks a snapshot operation as complete
+// Releases the advisory lock
 func (m *Manager) FinishSnapshot(snapshotName string) {
 	lockID := int64(crc32.ChecksumIEEE([]byte(snapshotName)))
 
 	_, err := m.dbConnection.Exec("SELECT pg_advisory_unlock($1)", lockID)
 	if err != nil {
-		m.logDebug("Error releasing advisory lock: %v", err)
+		fmt.Printf("Error releasing advisory lock: %v", err)
 	}
 }
 
-// WaitForOngoingSnapshot waits for an ongoing snapshot to complete
+// Waits for an ongoing snapshot to complete
 func (m *Manager) WaitForOngoingSnapshot(snapshotName string, timeout time.Duration) error {
 	lockID := int64(crc32.ChecksumIEEE([]byte(snapshotName)))
 
@@ -97,7 +89,7 @@ func (m *Manager) WaitForOngoingSnapshot(snapshotName string, timeout time.Durat
 
 	_, err = m.dbConnection.Exec("SELECT pg_advisory_unlock($1)", lockID)
 	if err != nil {
-		m.logDebug("Error releasing advisory lock: %v", err)
+		fmt.Printf("Error releasing advisory lock: %v", err)
 	}
 
 	return nil
