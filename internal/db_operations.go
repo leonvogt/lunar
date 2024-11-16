@@ -65,6 +65,19 @@ func OpenDatabaseConnection(databaseUrl string, sslMode bool) *sql.DB {
 	return db
 }
 
+func OpenDatabaseConnection2(databaseUrl string, sslMode bool) (*sql.DB, error) {
+	if !sslMode {
+		databaseUrl += "?sslmode=disable"
+	}
+
+	db, err := sql.Open("postgres", databaseUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
 func ConnectToTemplateDatabase() *sql.DB {
 	return ConnectToDatabase("template1")
 }

@@ -19,8 +19,6 @@ var (
 	}
 )
 
-var snapshotManager, _ = internal.NewSnapshotManager()
-
 func createSnapshot(args []string) {
 	if !internal.DoesConfigExist() {
 		fmt.Println("There seems to be no configuration file. Please run 'lunar init' first")
@@ -35,6 +33,8 @@ func createSnapshot(args []string) {
 	snapshotName := args[0]
 	config, _ := internal.ReadConfig()
 	snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
+
+	var snapshotManager, _ = internal.NewSnapshotManager(config)
 
 	if internal.DoesDatabaseExists(snapshotDatabaseName) {
 		fmt.Println("Snapshot with name", snapshotName, "already exists")

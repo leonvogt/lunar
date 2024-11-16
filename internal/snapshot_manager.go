@@ -11,17 +11,20 @@ import (
 // Manager handles database snapshot operations and locking
 type Manager struct {
 	dbConnection *sql.DB
+	config       *Config
 }
 
-func NewSnapshotManager() (*Manager, error) {
-	// Connect to postgres database
-	db, err := sql.Open("postgres", "postgres://localhost:5432/postgres?sslmode=disable")
+func NewSnapshotManager(config *Config) (*Manager, error) {
+	databaseURL := config.DatabaseUrl + "postgres"
+	db, err := OpenDatabaseConnection2(databaseURL, false)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %v", err)
 	}
 
 	return &Manager{
 		dbConnection: db,
+		config:       config,
 	}, nil
 }
 
