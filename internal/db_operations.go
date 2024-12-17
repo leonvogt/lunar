@@ -30,38 +30,42 @@ func AllDatabases(db *sql.DB) []string {
 	return databases
 }
 
-func AllSnapshotDatabases() []string {
+func AllSnapshotDatabases() ([]string, error) {
 	db := ConnectToTemplateDatabase()
 	databases := AllDatabases(db)
 	snapshotDatabases := make([]string, 0)
 	for _, database := range databases {
-		if len(database) >= 16 && database[:16] == "lunar_snapshot__" {
+		if len(database) >= 16 && database[:16] == "lunar_snapshot"+SEPERATOR {
 			snapshotDatabases = append(snapshotDatabases, database)
 		}
 	}
-	return snapshotDatabases
+	return snapshotDatabases, nil
 }
 
-func ConnectToDatabase(databaseName string) *sql.DB {
-	config, err := ReadConfig()
-	if err != nil {
-		panic(err)
-	}
-
-	databaseUrl := config.DatabaseUrl
-	return OpenDatabaseConnection(databaseUrl, false)
-}
-
-func OpenDatabaseConnection(databaseUrl string, sslMode bool) *sql.DB {
+func OpenDatabaseConnection(databaseUrl string, sslMode bool) (*sql.DB, error) {
 	if !sslMode {
 		databaseUrl += "?sslmode=disable"
 	}
 
 	db, err := sql.Open("postgres", databaseUrl)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to open database connection: %v", err)
 	}
 
+	return db, nil
+}
+
+func ConnectToDatabase(databaseName string) *sql.DB {
+	config, err := ReadConfig()
+	if err != nil {
+		panic(fmt.Errorf("failed to read config: %v", err))
+	}
+
+	databaseUrl := config.DatabaseUrl
+	db, err := OpenDatabaseConnection(databaseUrl+databaseName, false)
+	if err != nil {
+		panic(fmt.Errorf("failed to connect to database: %v", err))
+	}
 	return db
 }
 
@@ -69,36 +73,8 @@ func ConnectToTemplateDatabase() *sql.DB {
 	return ConnectToDatabase("template1")
 }
 
-func ConnectToDatabaseFromConfig() *sql.DB {
-	return ConnectToDatabase("")
-}
-
-func CreateSnapshot(databaseName, snapshotName string) error {
-	if err := TerminateAllCurrentConnections(databaseName); err != nil {
-		return fmt.Errorf("failed to terminate connections: %v", err)
-	}
-
-	db := ConnectToTemplateDatabase()
-	defer db.Close()
-
-	_, err := db.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", snapshotName, databaseName))
-	if err != nil {
-		return fmt.Errorf("failed to create snapshot: %v", err)
-	}
-
-	return nil
-}
-
-func RestoreSnapshot(databaseName, snapshotName string) {
-	DropDatabase(databaseName)
-
-	db := ConnectToTemplateDatabase()
-	defer db.Close()
-
-	_, err := db.Query("CREATE DATABASE " + databaseName + " TEMPLATE " + snapshotName)
-	if err != nil {
-		panic(err)
-	}
+func ConnectToPostgresDatabase() *sql.DB {
+	return ConnectToDatabase("postgres")
 }
 
 func TerminateAllCurrentConnections(databaseName string) error {
@@ -130,6 +106,17 @@ func DoesDatabaseExists(databaseName string) bool {
 	return rows.Next()
 }
 
+func TestConnection(db *sql.DB) error {
+	db.SetConnMaxLifetime(5 * time.Second)
+
+	err := db.Ping()
+	if err != nil {
+		return fmt.Errorf("failed to connect to database: %v", err)
+	}
+
+	return nil
+}
+
 func CreateDatabase(databaseName string) {
 	TerminateAllCurrentConnections("template1")
 	db := ConnectToTemplateDatabase()
@@ -139,6 +126,14 @@ func CreateDatabase(databaseName string) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func CreateDatabaseWithTemplate(db *sql.DB, databaseName, templateDatabaseName string) error {
+	_, err := db.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", databaseName, templateDatabaseName))
+	if err != nil {
+		return fmt.Errorf("failed to create database: %v", err)
+	}
+	return nil
 }
 
 func DropDatabase(databaseName string) {
@@ -151,12 +146,15 @@ func DropDatabase(databaseName string) {
 	}
 }
 
-func TestConnection(db *sql.DB) error {
-	db.SetConnMaxLifetime(5 * time.Second)
+func RestoreSnapshot(databaseName, snapshotName string) error {
+	DropDatabase(databaseName)
 
-	err := db.Ping()
+	db := ConnectToTemplateDatabase()
+	defer db.Close()
+
+	_, err := db.Query("CREATE DATABASE " + databaseName + " TEMPLATE " + snapshotName)
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %v", err)
+		return fmt.Errorf("failed to restore snapshot: %v", err)
 	}
 
 	return nil

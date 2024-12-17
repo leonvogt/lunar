@@ -19,8 +19,6 @@ var (
 	}
 )
 
-var snapshotManager, _ = internal.NewSnapshotManager()
-
 func createSnapshot(args []string) {
 	if !internal.DoesConfigExist() {
 		fmt.Println("There seems to be no configuration file. Please run 'lunar init' first")
@@ -34,40 +32,24 @@ func createSnapshot(args []string) {
 
 	snapshotName := args[0]
 	config, _ := internal.ReadConfig()
-	snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
+	snapshotManager, _ := internal.SnapshotManager(config)
 
-	if internal.DoesDatabaseExists(snapshotDatabaseName) {
-		fmt.Println("Snapshot with name", snapshotName, "already exists")
+	if err := snapshotManager.CheckIfSnapshotCanBeTaken(snapshotName); err != nil {
+		fmt.Println(err)
 		return
-	}
-
-	if snapshotManager.IsSnapshotInProgress(snapshotName) {
-		fmt.Println("Waiting for ongoing snapshot to complete...")
-		if err := snapshotManager.WaitForOngoingSnapshot(snapshotName, 30*time.Minute); err != nil {
-			fmt.Printf("Error: %v\n", err)
-			return
-		}
 	}
 
 	message := fmt.Sprintf("Creating a snapshot for the database %s", config.DatabaseName)
 	stopSpinner := StartSpinner(message)
-
-	if err := snapshotManager.MarkSnapshotStart(snapshotName); err != nil {
-		fmt.Printf("Error starting snapshot: %v\n", err)
-		return
-	}
-
-	if err := internal.CreateSnapshot(config.DatabaseName, snapshotDatabaseName); err != nil {
-		fmt.Printf("Error creating initial snapshot: %v\n", err)
-		snapshotManager.MarkSnapshotFinish(snapshotName)
-		return
-	}
+	snapshotManager.StartSnapshotprocess(snapshotName)
 
 	// Channel to track completion of background task
 	done := make(chan bool)
 	var copyErr error
 
 	// Run the snapshot copy in the background
+	snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
+	snapshotCopyDatabaseName := snapshotDatabaseName + "_copy"
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -77,7 +59,7 @@ func createSnapshot(args []string) {
 			done <- true
 		}()
 
-		if err := internal.CreateSnapshot(config.DatabaseName, snapshotDatabaseName+"_copy"); err != nil {
+		if err := snapshotManager.CreateSnapshot(config.DatabaseName, snapshotCopyDatabaseName); err != nil {
 			copyErr = err
 			return
 		}
@@ -94,5 +76,4 @@ func createSnapshot(args []string) {
 	}
 
 	stopSpinner()
-	fmt.Println("Snapshot created successfully")
 }

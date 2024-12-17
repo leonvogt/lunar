@@ -11,17 +11,15 @@ import (
 // Manager handles database snapshot operations and locking
 type Manager struct {
 	dbConnection *sql.DB
+	config       *Config
 }
 
-func NewSnapshotManager() (*Manager, error) {
-	// Connect to postgres database
-	db, err := sql.Open("postgres", "postgres://localhost:5432/postgres?sslmode=disable")
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %v", err)
-	}
+func SnapshotManager(config *Config) (*Manager, error) {
+	db := ConnectToPostgresDatabase()
 
 	return &Manager{
 		dbConnection: db,
+		config:       config,
 	}, nil
 }
 
@@ -30,7 +28,54 @@ func (manager *Manager) Close() error {
 	return manager.dbConnection.Close()
 }
 
-// IsSnapshotInProgress checks if a snapshot operation is currently running
+func (manager *Manager) CheckIfSnapshotCanBeTaken(snapshotName string) error {
+	databaseName := manager.config.DatabaseName
+	databaseNameFromSnapshot := SnapshotDatabaseName(databaseName, snapshotName)
+
+	if DoesDatabaseExists(databaseNameFromSnapshot) {
+		return fmt.Errorf("snapshot with name %s already exists", snapshotName)
+	}
+
+	if manager.IsSnapshotInProgress(snapshotName) {
+		fmt.Println("Waiting for ongoing snapshot to complete...")
+		if err := manager.WaitForOngoingSnapshot(snapshotName, 30*time.Minute); err != nil {
+			return fmt.Errorf("failed to wait for ongoing snapshot: %v", err)
+		}
+	}
+	return nil
+}
+
+func (manager *Manager) StartSnapshotprocess(snapshotName string) error {
+	databaseName := manager.config.DatabaseName
+	databaseNameFromSnapshot := SnapshotDatabaseName(databaseName, snapshotName)
+
+	if err := manager.MarkSnapshotStart(snapshotName); err != nil {
+		return fmt.Errorf("failed to mark snapshot start: %v", err)
+	}
+
+	if err := manager.CreateSnapshot(databaseName, databaseNameFromSnapshot); err != nil {
+		fmt.Printf("Error creating snapshot: %v\n", err)
+		manager.MarkSnapshotFinish(snapshotName)
+	}
+
+	fmt.Println("Snapshot created successfully")
+	return nil
+}
+
+func (manager *Manager) CreateSnapshot(databaseName, snapshotName string) error {
+	if err := TerminateAllCurrentConnections(databaseName); err != nil {
+		return fmt.Errorf("failed to terminate connections: %v", err)
+	}
+
+	err := CreateDatabaseWithTemplate(manager.dbConnection, snapshotName, databaseName)
+	if err != nil {
+		return fmt.Errorf("failed to create snapshot: %v", err)
+	}
+
+	return nil
+}
+
+// Checks if a snapshot operation is currently running
 func (manager *Manager) IsSnapshotInProgress(snapshotName string) bool {
 	lockID := int64(crc32.ChecksumIEEE([]byte(snapshotName)))
 
