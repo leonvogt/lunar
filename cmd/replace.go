@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/leonvogt/lunar/internal"
 	"github.com/spf13/cobra"
 )
 
@@ -17,35 +18,35 @@ var (
 )
 
 func replaceSnapshot(args []string) {
-	// if !internal.DoesConfigExist() {
-	// 	fmt.Println("There seems to be no configuration file. Please run 'lunar init' first.")
-	// 	return
-	// }
+	if !internal.DoesConfigExist() {
+		fmt.Println("There seems to be no configuration file. Please run 'lunar init' first.")
+		return
+	}
 
-	// if len(args) != 1 {
-	// 	fmt.Println("Please provide a snapshot name.")
-	// 	return
-	// }
+	if len(args) != 1 {
+		fmt.Println("Please provide a snapshot name.")
+		return
+	}
 
-	// snapshotName := args[0]
-	// config, _ := internal.ReadConfig()
-	// snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
+	snapshotName := args[0]
+	config, _ := internal.ReadConfig()
+	snapshotManager, err := internal.SnapshotManager(config)
+	if err != nil {
+		fmt.Printf("Error initializing snapshot manager: %v\n", err)
+		return
+	}
+	defer snapshotManager.Close()
 
-	// // Remove the existing snapshot
-	// fmt.Println("Removing snapshot ", snapshotName)
-	// internal.TerminateAllCurrentConnections(snapshotDatabaseName)
-	// internal.DropDatabase(snapshotDatabaseName)
+	message := fmt.Sprintf("Replacing snapshot %s for database %s", snapshotName, config.DatabaseName)
+	stopSpinner := StartSpinner(message)
 
-	// // Create a new snapshot
-	// message := fmt.Sprintf("Creating a snapshot for the database %s", config.DatabaseName)
-	// stopSpinner := StartSpinner(message)
+	// Replace the snapshot using the snapshot manager
+	if err := snapshotManager.ReplaceSnapshot(snapshotName); err != nil {
+		stopSpinner()
+		fmt.Printf("Error replacing snapshot: %v\n", err)
+		return
+	}
 
-	// internal.TerminateAllCurrentConnections(snapshotDatabaseName)
-	// internal.TerminateAllCurrentConnections(config.DatabaseName)
-	// internal.CreateSnapshot(config.DatabaseName, snapshotDatabaseName)
-
-	// done := stopSpinner()
-	// <-done
-
-	fmt.Println("Snapshot created successfully")
+	stopSpinner()
+	fmt.Println("Snapshot replaced successfully")
 }

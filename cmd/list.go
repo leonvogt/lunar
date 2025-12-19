@@ -23,8 +23,25 @@ func listSnapshots() {
 		return
 	}
 
-	config, _ := internal.ReadConfig()
-	snapshots := internal.SnapshotDatabasesForDatabase(config.DatabaseName)
+	config, err := internal.ReadConfig()
+	if err != nil {
+		fmt.Printf("Error reading config: %v\n", err)
+		return
+	}
+
+	snapshotManager, err := internal.SnapshotManager(config)
+	if err != nil {
+		fmt.Printf("Error initializing snapshot manager: %v\n", err)
+		return
+	}
+	defer snapshotManager.Close()
+
+	snapshots, err := snapshotManager.ListSnapshots()
+	if err != nil {
+		fmt.Printf("Error listing snapshots: %v\n", err)
+		return
+	}
+
 	if len(snapshots) == 0 {
 		fmt.Println("No snapshots found.")
 		return

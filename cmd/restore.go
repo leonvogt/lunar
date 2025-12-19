@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/leonvogt/lunar/internal"
 	"github.com/spf13/cobra"
 )
 
@@ -17,29 +18,41 @@ var (
 )
 
 func restoreSnapshot(args []string) {
-	// if !internal.DoesConfigExist() {
-	// 	fmt.Println("There seems to be no configuration file. Please run 'lunar init' first.")
-	// 	return
-	// }
+	if !internal.DoesConfigExist() {
+		fmt.Println("There seems to be no configuration file. Please run 'lunar init' first.")
+		return
+	}
 
-	// if len(args) != 1 {
-	// 	fmt.Println("Please provide a snapshot name.")
-	// 	return
-	// }
+	if len(args) != 1 {
+		fmt.Println("Please provide a snapshot name.")
+		return
+	}
 
-	// snapshotName := args[0]
-	// config, _ := internal.ReadConfig()
-	// snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
+	snapshotName := args[0]
+	config, _ := internal.ReadConfig()
+	snapshotManager, err := internal.SnapshotManager(config)
+	if err != nil {
+		fmt.Printf("Error initializing snapshot manager: %v\n", err)
+		return
+	}
+	defer snapshotManager.Close()
 
-	// message := fmt.Sprintf("Restoring snapshot %s (%s) for database %s", snapshotName, snapshotDatabaseName, config.DatabaseName)
-	// stopSpinner := StartSpinner(message)
+	if err := snapshotManager.CheckIfSnapshotExists(snapshotName); err != nil {
+		fmt.Println(err)
+		return
+	}
 
-	// internal.TerminateAllCurrentConnections(config.DatabaseName)
-	// internal.TerminateAllCurrentConnections(snapshotDatabaseName)
-	// internal.RestoreSnapshot(config.DatabaseName, snapshotDatabaseName)
+	snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
+	message := fmt.Sprintf("Restoring snapshot %s (%s) for database %s", snapshotName, snapshotDatabaseName, config.DatabaseName)
+	stopSpinner := StartSpinner(message)
 
-	// done := stopSpinner()
-	// <-done
+	// Restore the snapshot using the snapshot manager
+	if err := snapshotManager.RestoreSnapshot(snapshotName); err != nil {
+		stopSpinner()
+		fmt.Printf("Error restoring snapshot: %v\n", err)
+		return
+	}
 
+	stopSpinner()
 	fmt.Println("Snapshot restored successfully")
 }

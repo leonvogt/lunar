@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/erikgeiser/promptkit/selection"
 	"github.com/leonvogt/lunar/internal"
 	"github.com/spf13/cobra"
 )
@@ -24,16 +26,71 @@ func removeSnapshot(args []string) {
 		return
 	}
 
-	if len(args) != 1 {
-		fmt.Println("Please provide a snapshot name.")
+	config, err := internal.ReadConfig()
+	if err != nil {
+		fmt.Printf("Error reading config: %v\n", err)
 		return
 	}
 
-	snapshotName := args[0]
-	config, _ := internal.ReadConfig()
-	snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
-	fmt.Println("Removing snapshot ", snapshotName)
+	snapshotManager, err := internal.SnapshotManager(config)
+	if err != nil {
+		fmt.Printf("Error initializing snapshot manager: %v\n", err)
+		return
+	}
+	defer snapshotManager.Close()
 
-	internal.TerminateAllCurrentConnections(snapshotDatabaseName)
-	internal.DropDatabase(snapshotDatabaseName)
+	// If a snapshot name is provided as argument, remove it directly
+	if len(args) == 1 {
+		snapshotName := args[0]
+		if err := snapshotManager.CheckIfSnapshotExists(snapshotName); err != nil {
+			fmt.Println(err)
+			return
+		}
+		removeSnapshotByName(snapshotManager, snapshotName)
+		return
+	}
+
+	// Otherwise, show selection interface
+	snapshots, err := snapshotManager.ListSnapshots()
+	if err != nil {
+		fmt.Printf("Error listing snapshots: %v\n", err)
+		return
+	}
+
+	if len(snapshots) == 0 {
+		fmt.Println("No snapshots found.")
+		return
+	}
+
+	sp := selection.New("Please select a snapshot to remove:", snapshots)
+	sp.PageSize = 50
+
+	selectedSnapshot, err := sp.RunPrompt()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	removeSnapshotByName(snapshotManager, selectedSnapshot)
+}
+
+func removeSnapshotByName(snapshotManager *internal.Manager, snapshotName string) {
+	fmt.Printf("Removing snapshot %s...\n", snapshotName)
+
+	// Remove the main snapshot
+	if err := snapshotManager.RemoveSnapshot(snapshotName); err != nil {
+		fmt.Printf("Error removing snapshot: %v\n", err)
+		return
+	}
+
+	// Also remove the _copy version if it exists
+	copySnapshotName := snapshotName + "_copy"
+	if err := snapshotManager.CheckIfSnapshotExists(copySnapshotName); err == nil {
+		fmt.Printf("Also removing temporary snapshot %s...\n", copySnapshotName)
+		if err := snapshotManager.RemoveSnapshot(copySnapshotName); err != nil {
+			fmt.Printf("Warning: Could not remove temporary snapshot: %v\n", err)
+		}
+	}
+
+	fmt.Println("Snapshot removed successfully")
 }

@@ -34,11 +34,15 @@ func AllSnapshotDatabases() ([]string, error) {
 	db := ConnectToTemplateDatabase()
 	databases := AllDatabases(db)
 	snapshotDatabases := make([]string, 0)
+
+	expectedPrefix := "lunar_snapshot" + SEPERATOR
+
 	for _, database := range databases {
-		if len(database) >= 16 && database[:16] == "lunar_snapshot"+SEPERATOR {
+		if len(database) >= len(expectedPrefix) && database[:len(expectedPrefix)] == expectedPrefix {
 			snapshotDatabases = append(snapshotDatabases, database)
 		}
 	}
+
 	return snapshotDatabases, nil
 }
 

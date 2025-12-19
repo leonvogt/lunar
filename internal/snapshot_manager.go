@@ -139,3 +139,91 @@ func (manager *Manager) WaitForOngoingSnapshot(snapshotName string, timeout time
 
 	return nil
 }
+
+func (manager *Manager) CheckIfSnapshotExists(snapshotName string) error {
+	databaseName := manager.config.DatabaseName
+	databaseNameFromSnapshot := SnapshotDatabaseName(databaseName, snapshotName)
+
+	if !DoesDatabaseExists(databaseNameFromSnapshot) {
+		return fmt.Errorf("snapshot with name %s does not exist", snapshotName)
+	}
+
+	return nil
+}
+
+func (manager *Manager) RestoreSnapshot(snapshotName string) error {
+	databaseName := manager.config.DatabaseName
+	snapshotDatabaseName := SnapshotDatabaseName(databaseName, snapshotName)
+
+	// Terminate all connections to both databases
+	if err := TerminateAllCurrentConnections(databaseName); err != nil {
+		return fmt.Errorf("failed to terminate connections to database: %v", err)
+	}
+
+	if err := TerminateAllCurrentConnections(snapshotDatabaseName); err != nil {
+		return fmt.Errorf("failed to terminate connections to snapshot: %v", err)
+	}
+
+	if err := RestoreSnapshot(databaseName, snapshotDatabaseName); err != nil {
+		return fmt.Errorf("failed to restore snapshot: %v", err)
+	}
+
+	return nil
+}
+
+// RemoveSnapshot removes an existing snapshot database
+func (manager *Manager) RemoveSnapshot(snapshotName string) error {
+	databaseName := manager.config.DatabaseName
+	snapshotDatabaseName := SnapshotDatabaseName(databaseName, snapshotName)
+
+	// Terminate all connections to the snapshot database
+	if err := TerminateAllCurrentConnections(snapshotDatabaseName); err != nil {
+		return fmt.Errorf("failed to terminate connections to snapshot: %v", err)
+	}
+
+	// Drop the snapshot database
+	DropDatabase(snapshotDatabaseName)
+	return nil
+}
+
+// ReplaceSnapshot removes an existing snapshot and creates a new one with the same name
+func (manager *Manager) ReplaceSnapshot(snapshotName string) error {
+	// Check if the snapshot exists
+	if err := manager.CheckIfSnapshotExists(snapshotName); err != nil {
+		return err
+	}
+
+	// Check for ongoing snapshot operations
+	if manager.IsSnapshotInProgress(snapshotName) {
+		fmt.Println("Waiting for ongoing snapshot to complete...")
+		if err := manager.WaitForOngoingSnapshot(snapshotName, 30*time.Minute); err != nil {
+			return fmt.Errorf("failed to wait for ongoing snapshot: %v", err)
+		}
+	}
+
+	// Remove the existing snapshot
+	if err := manager.RemoveSnapshot(snapshotName); err != nil {
+		return fmt.Errorf("failed to remove existing snapshot: %v", err)
+	}
+
+	// Create a new snapshot with the same name
+	databaseName := manager.config.DatabaseName
+	snapshotDatabaseName := SnapshotDatabaseName(databaseName, snapshotName)
+
+	if err := manager.MarkSnapshotStart(snapshotName); err != nil {
+		return fmt.Errorf("failed to mark snapshot start: %v", err)
+	}
+
+	if err := manager.CreateSnapshot(databaseName, snapshotDatabaseName); err != nil {
+		manager.MarkSnapshotFinish(snapshotName)
+		return fmt.Errorf("failed to create new snapshot: %v", err)
+	}
+
+	manager.MarkSnapshotFinish(snapshotName)
+	return nil
+}
+
+func (manager *Manager) ListSnapshots() ([]string, error) {
+	databaseName := manager.config.DatabaseName
+	return SnapshotDatabasesForDatabase(databaseName), nil
+}
