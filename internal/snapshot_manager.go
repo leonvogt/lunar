@@ -36,6 +36,15 @@ func (manager *Manager) CheckIfSnapshotCanBeTaken(snapshotName string) error {
 		return fmt.Errorf("snapshot with name %s already exists", snapshotName)
 	}
 
+	// Check for ongoing operations on this database (e.g., restore in progress)
+	if manager.IsOperationInProgress(databaseName) {
+		fmt.Println("Waiting for ongoing operation to complete...")
+		if err := manager.WaitForOngoingOperation(databaseName, 30*time.Minute); err != nil {
+			return fmt.Errorf("failed to wait for ongoing operation: %v", err)
+		}
+	}
+
+	// Check for ongoing snapshot operations with the same name
 	if manager.IsSnapshotInProgress(snapshotName) {
 		fmt.Println("Waiting for ongoing snapshot to complete...")
 		if err := manager.WaitForOngoingSnapshot(snapshotName, 30*time.Minute); err != nil {
@@ -49,13 +58,19 @@ func (manager *Manager) StartSnapshotprocess(snapshotName string) error {
 	databaseName := manager.config.DatabaseName
 	databaseNameFromSnapshot := SnapshotDatabaseName(databaseName, snapshotName)
 
+	// Acquire operation lock to block restores during snapshot
+	if err := manager.MarkOperationStart(databaseName); err != nil {
+		return fmt.Errorf("failed to acquire operation lock: %v", err)
+	}
+	defer manager.MarkOperationFinish(databaseName)
+
 	if err := manager.MarkSnapshotStart(snapshotName); err != nil {
 		return fmt.Errorf("failed to mark snapshot start: %v", err)
 	}
+	defer manager.MarkSnapshotFinish(snapshotName)
 
 	if err := manager.CreateSnapshot(databaseName, databaseNameFromSnapshot); err != nil {
-		fmt.Printf("Error creating snapshot: %v\n", err)
-		manager.MarkSnapshotFinish(snapshotName)
+		return fmt.Errorf("error creating snapshot: %v", err)
 	}
 
 	fmt.Println("Snapshot created successfully")
@@ -140,6 +155,76 @@ func (manager *Manager) WaitForOngoingSnapshot(snapshotName string, timeout time
 	return nil
 }
 
+// operationLockID generates a lock ID for database-level operations (restore, etc.)
+// Uses a different prefix to avoid collision with snapshot locks
+func (manager *Manager) operationLockID(databaseName string) int64 {
+	return int64(crc32.ChecksumIEEE([]byte("op:" + databaseName)))
+}
+
+// IsOperationInProgress checks if any operation is currently running on the database
+func (manager *Manager) IsOperationInProgress(databaseName string) bool {
+	lockID := manager.operationLockID(databaseName)
+
+	var locked bool
+	err := manager.dbConnection.QueryRow("SELECT pg_try_advisory_lock($1)", lockID).Scan(&locked)
+	if err != nil {
+		fmt.Printf("Error checking advisory lock: %v", err)
+		return true
+	}
+
+	if locked {
+		_, err := manager.dbConnection.Exec("SELECT pg_advisory_unlock($1)", lockID)
+		if err != nil {
+			fmt.Printf("Error releasing advisory lock: %v", err)
+		}
+		return false
+	}
+
+	return true
+}
+
+// MarkOperationStart acquires an advisory lock for database operations
+func (manager *Manager) MarkOperationStart(databaseName string) error {
+	lockID := manager.operationLockID(databaseName)
+
+	_, err := manager.dbConnection.Exec("SELECT pg_advisory_lock($1)", lockID)
+	if err != nil {
+		return fmt.Errorf("failed to acquire operation lock: %v", err)
+	}
+
+	return nil
+}
+
+// MarkOperationFinish releases the advisory lock for database operations
+func (manager *Manager) MarkOperationFinish(databaseName string) {
+	lockID := manager.operationLockID(databaseName)
+
+	_, err := manager.dbConnection.Exec("SELECT pg_advisory_unlock($1)", lockID)
+	if err != nil {
+		fmt.Printf("Error releasing advisory lock: %v", err)
+	}
+}
+
+// WaitForOngoingOperation waits for any ongoing operation on the database to complete
+func (manager *Manager) WaitForOngoingOperation(databaseName string, timeout time.Duration) error {
+	lockID := manager.operationLockID(databaseName)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	_, err := manager.dbConnection.ExecContext(ctx, "SELECT pg_advisory_lock($1)", lockID)
+	if err != nil {
+		return fmt.Errorf("timeout waiting for ongoing operation to complete: %v", err)
+	}
+
+	_, err = manager.dbConnection.Exec("SELECT pg_advisory_unlock($1)", lockID)
+	if err != nil {
+		fmt.Printf("Error releasing advisory lock: %v", err)
+	}
+
+	return nil
+}
+
 func (manager *Manager) CheckIfSnapshotExists(snapshotName string) error {
 	databaseName := manager.config.DatabaseName
 	databaseNameFromSnapshot := SnapshotDatabaseName(databaseName, snapshotName)
@@ -154,6 +239,20 @@ func (manager *Manager) CheckIfSnapshotExists(snapshotName string) error {
 func (manager *Manager) RestoreSnapshot(snapshotName string) error {
 	databaseName := manager.config.DatabaseName
 	snapshotDatabaseName := SnapshotDatabaseName(databaseName, snapshotName)
+
+	// Check for ongoing operations on this database
+	if manager.IsOperationInProgress(databaseName) {
+		fmt.Println("Waiting for ongoing operation to complete...")
+		if err := manager.WaitForOngoingOperation(databaseName, 30*time.Minute); err != nil {
+			return fmt.Errorf("failed to wait for ongoing operation: %v", err)
+		}
+	}
+
+	// Acquire lock for the restore operation
+	if err := manager.MarkOperationStart(databaseName); err != nil {
+		return fmt.Errorf("failed to acquire operation lock: %v", err)
+	}
+	defer manager.MarkOperationFinish(databaseName)
 
 	// Terminate all connections to both databases
 	if err := TerminateAllCurrentConnections(databaseName); err != nil {
@@ -188,12 +287,22 @@ func (manager *Manager) RemoveSnapshot(snapshotName string) error {
 
 // ReplaceSnapshot removes an existing snapshot and creates a new one with the same name
 func (manager *Manager) ReplaceSnapshot(snapshotName string) error {
+	databaseName := manager.config.DatabaseName
+
 	// Check if the snapshot exists
 	if err := manager.CheckIfSnapshotExists(snapshotName); err != nil {
 		return err
 	}
 
-	// Check for ongoing snapshot operations
+	// Check for ongoing operations on this database
+	if manager.IsOperationInProgress(databaseName) {
+		fmt.Println("Waiting for ongoing operation to complete...")
+		if err := manager.WaitForOngoingOperation(databaseName, 30*time.Minute); err != nil {
+			return fmt.Errorf("failed to wait for ongoing operation: %v", err)
+		}
+	}
+
+	// Also check for ongoing snapshot operations
 	if manager.IsSnapshotInProgress(snapshotName) {
 		fmt.Println("Waiting for ongoing snapshot to complete...")
 		if err := manager.WaitForOngoingSnapshot(snapshotName, 30*time.Minute); err != nil {
@@ -201,25 +310,29 @@ func (manager *Manager) ReplaceSnapshot(snapshotName string) error {
 		}
 	}
 
+	// Acquire lock for the operation
+	if err := manager.MarkOperationStart(databaseName); err != nil {
+		return fmt.Errorf("failed to acquire operation lock: %v", err)
+	}
+	defer manager.MarkOperationFinish(databaseName)
+
 	// Remove the existing snapshot
 	if err := manager.RemoveSnapshot(snapshotName); err != nil {
 		return fmt.Errorf("failed to remove existing snapshot: %v", err)
 	}
 
 	// Create a new snapshot with the same name
-	databaseName := manager.config.DatabaseName
 	snapshotDatabaseName := SnapshotDatabaseName(databaseName, snapshotName)
 
 	if err := manager.MarkSnapshotStart(snapshotName); err != nil {
 		return fmt.Errorf("failed to mark snapshot start: %v", err)
 	}
+	defer manager.MarkSnapshotFinish(snapshotName)
 
 	if err := manager.CreateSnapshot(databaseName, snapshotDatabaseName); err != nil {
-		manager.MarkSnapshotFinish(snapshotName)
 		return fmt.Errorf("failed to create new snapshot: %v", err)
 	}
 
-	manager.MarkSnapshotFinish(snapshotName)
 	return nil
 }
 

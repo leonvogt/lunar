@@ -42,8 +42,7 @@ func restoreSnapshot(args []string) {
 		return
 	}
 
-	snapshotDatabaseName := internal.SnapshotDatabaseName(config.DatabaseName, snapshotName)
-	message := fmt.Sprintf("Restoring snapshot %s (%s) for database %s", snapshotName, snapshotDatabaseName, config.DatabaseName)
+	message := fmt.Sprintf("Restoring snapshot %s for database %s", snapshotName, config.DatabaseName)
 	stopSpinner := StartSpinner(message)
 
 	// Restore the snapshot using the snapshot manager
