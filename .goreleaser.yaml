@@ -1,4 +1,4 @@
-version: 1
+version: 2
 
 builds:
   - env:
@@ -7,6 +7,11 @@ builds:
       - linux
       - windows
       - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/leonvogt/lunar/cmd.version={{.Version}}
 
 archives:
   - format: tar.gz
@@ -29,14 +34,26 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
+      - "^chore:"
+      - "^ci:"
 
 brews:
-  -
-    name: lunar-db
+  - name: lunar-db
     license: "MIT"
     homepage: "https://github.com/leonvogt/lunar"
-    description: "Database snapshot tool for PostgreSQL databases"
+    description: "Database snapshot tool for PostgreSQL databases. Installs the `lunar` command."
     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
     repository:
       owner: leonvogt
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+
+release:
+  footer: |
+    ## Installation
+
+    ```bash
+    brew install leonvogt/tap/lunar-db
+    ```
+
+    Or download the binary from the assets below.
