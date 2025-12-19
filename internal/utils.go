@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-var SEPERATOR = "____"
+var SEPARATOR = "____"
 
 func SnapshotDatabaseName(databaseName, userProvidedSnapshotName string) string {
-	return "lunar_snapshot" + SEPERATOR + databaseName + SEPERATOR + userProvidedSnapshotName
+	return "lunar_snapshot" + SEPARATOR + databaseName + SEPARATOR + userProvidedSnapshotName
 }
 
 func SnapshotDatabasesForDatabase(databaseName string) []string {
@@ -19,9 +19,9 @@ func SnapshotDatabasesForDatabase(databaseName string) []string {
 		return snapshots
 	}
 	for _, db := range allLunarSnapshotDatabases {
-		// Split the database name from the snapshot name, by splitting at the SEPERATOR
+		// Split the database name from the snapshot name, by splitting at the SEPARATOR
 		// The first part is the database name, the second part is the snapshot name
-		parts := strings.Split(db, SEPERATOR)
+		parts := strings.Split(db, SEPARATOR)
 
 		if len(parts) >= 3 && parts[1] == databaseName {
 			snapshotName := parts[2]

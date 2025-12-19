@@ -16,7 +16,7 @@ func AllDatabases(db *sql.DB) []string {
 	if err != nil {
 		panic(err)
 	}
-	db.Close()
+	defer rows.Close()
 
 	for rows.Next() {
 		var database string
@@ -32,10 +32,12 @@ func AllDatabases(db *sql.DB) []string {
 
 func AllSnapshotDatabases() ([]string, error) {
 	db := ConnectToTemplateDatabase()
+	defer db.Close()
+
 	databases := AllDatabases(db)
 	snapshotDatabases := make([]string, 0)
 
-	expectedPrefix := "lunar_snapshot" + SEPERATOR
+	expectedPrefix := "lunar_snapshot" + SEPARATOR
 
 	for _, database := range databases {
 		if len(database) >= len(expectedPrefix) && database[:len(expectedPrefix)] == expectedPrefix {
@@ -159,14 +161,15 @@ func TerminateAllCurrentConnections(databaseName string) error {
 
 func DoesDatabaseExists(databaseName string) bool {
 	db := ConnectToTemplateDatabase()
+	defer db.Close()
 
-	rows, err := db.Query("SELECT 1 FROM pg_database WHERE datname='" + databaseName + "'")
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", databaseName).Scan(&exists)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer rows.Close()
 
-	return rows.Next()
+	return exists
 }
 
 func TestConnection(db *sql.DB) error {
@@ -203,7 +206,9 @@ func DropDatabase(databaseName string) {
 	db := ConnectToTemplateDatabase()
 	defer db.Close()
 
-	_, err := db.Query("DROP DATABASE IF EXISTS " + databaseName)
+	// Note: PostgreSQL doesn't support parameterized DDL for database names
+	// The databaseName comes from internal snapshot naming, not user input
+	_, err := db.Exec("DROP DATABASE IF EXISTS " + databaseName)
 	if err != nil {
 		panic(err)
 	}
@@ -215,7 +220,8 @@ func RestoreSnapshot(databaseName, snapshotName string) error {
 	db := ConnectToTemplateDatabase()
 	defer db.Close()
 
-	_, err := db.Query("CREATE DATABASE " + databaseName + " TEMPLATE " + snapshotName)
+	// Note: PostgreSQL doesn't support parameterized DDL for database names
+	_, err := db.Exec("CREATE DATABASE " + databaseName + " TEMPLATE " + snapshotName)
 	if err != nil {
 		return fmt.Errorf("failed to restore snapshot: %v", err)
 	}

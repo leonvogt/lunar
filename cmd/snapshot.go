@@ -31,8 +31,17 @@ func createSnapshot(args []string) {
 	}
 
 	snapshotName := args[0]
-	config, _ := internal.ReadConfig()
-	snapshotManager, _ := internal.SnapshotManager(config)
+	config, err := internal.ReadConfig()
+	if err != nil {
+		fmt.Printf("Error reading config: %v\n", err)
+		return
+	}
+	snapshotManager, err := internal.SnapshotManager(config)
+	if err != nil {
+		fmt.Printf("Error initializing snapshot manager: %v\n", err)
+		return
+	}
+	defer snapshotManager.Close()
 
 	if err := snapshotManager.CheckIfSnapshotCanBeTaken(snapshotName); err != nil {
 		fmt.Println(err)
