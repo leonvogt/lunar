@@ -1,48 +1,62 @@
 package tests
 
 import (
-	"os/exec"
+	"os"
 	"testing"
 
 	"github.com/leonvogt/lunar/internal"
 )
 
+func TestMain(m *testing.M) {
+	// This will be called once before all tests in this package
+	code := m.Run()
+	os.Exit(code)
+}
+
 func TestSnapshot(t *testing.T) {
-	SetupTestDatabase()
+	SetupTestDatabase(t)
+	defer TeardownTestContainer(t)
 
-	command := "go run ../main.go snapshot production"
-	err := exec.Command("sh", "-c", command).Run()
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	WithTestDirectory(t, func() {
+		// Verify we're in the right place
+		if _, err := os.Stat("main.go"); os.IsNotExist(err) {
+			wd, _ := os.Getwd()
+			t.Fatalf("main.go not found in current directory. Current dir: %s", wd)
+		}
 
-	if !internal.DoesDatabaseExists("lunar_snapshot__lunar_test__production") {
-		t.Errorf("Expected database `lunar_snapshot__lunar_test__production` to exist - but it does not")
-	}
+		CreateTestSnapshot(t, "production")
 
-	internal.DropDatabase("lunar_snapshot__lunar_test__production")
+		// Go back to tests directory to check database
+		os.Chdir("tests")
+		if !internal.DoesDatabaseExists(SnapshotDatabaseName("production")) {
+			t.Errorf("Expected database `%s` to exist - but it does not", SnapshotDatabaseName("production"))
+		}
+
+		// Cleanup
+		CleanupSnapshot("production")
+	})
 }
 
 func TestSnapshotAlreadyExists(t *testing.T) {
-	SetupTestDatabase()
+	SetupTestDatabase(t)
+	defer TeardownTestContainer(t)
 
-	command := "go run ../main.go snapshot production"
-	err := exec.Command("sh", "-c", command).Run()
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	WithTestDirectory(t, func() {
+		CreateTestSnapshot(t, "production")
 
-	// Try to create a snapshot with the same name
-	command = "go run ../main.go snapshot production"
-	out, err := exec.Command("sh", "-c", command).Output()
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+		// Try to create a snapshot with the same name
+		out, err := RunLunarCommand("snapshot production")
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
 
-	expectedOutput := "Snapshot with name production already exists\n"
-	if string(out) != expectedOutput {
-		t.Errorf("Expected output to be '%v' but got '%v'", expectedOutput, string(out))
-	}
+		expectedOutput := "snapshot with name production already exists\n"
+		if string(out) != expectedOutput {
+			t.Errorf("Expected output to be '%v' but got '%v'", expectedOutput, string(out))
+		}
 
-	internal.DropDatabase("lunar_snapshot__lunar_test__production")
+		// Go back to tests directory for cleanup
+		os.Chdir("tests")
+		CleanupSnapshot("production")
+	})
 }

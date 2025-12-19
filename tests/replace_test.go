@@ -1,33 +1,35 @@
 package tests
 
 import (
-	"os/exec"
+	"os"
 	"testing"
 
 	"github.com/leonvogt/lunar/internal"
 )
 
 func TestReplace(t *testing.T) {
-	SetupTestDatabase()
+	SetupTestDatabase(t)
+	defer TeardownTestContainer(t)
 
-	// Create a snapshot
-	command := "go run ../main.go snapshot production"
-	err := exec.Command("sh", "-c", command).Run()
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	WithTestDirectory(t, func() {
+		CreateTestSnapshot(t, "production")
 
-	if !internal.DoesDatabaseExists("lunar_snapshot__lunar_test__production") {
-		t.Errorf("Expected database `lunar_snapshot__lunar_test__production` to exist - but it does not")
-	}
+		// Go back to tests directory to check database exists
+		os.Chdir("tests")
+		if !internal.DoesDatabaseExists(SnapshotDatabaseName("production")) {
+			t.Errorf("Expected database `%s` to exist - but it does not", SnapshotDatabaseName("production"))
+		}
 
-	// Replace the snapshot
-	command = "go run ../main.go replace production"
-	err = exec.Command("sh", "-c", command).Run()
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+		// Go back to parent directory for replace command
+		os.Chdir("..")
+		// Replace the snapshot
+		_, err := RunLunarCommand("replace production")
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
 
-	// Cleanup
-	internal.DropDatabase("lunar_snapshot__lunar_test__production")
+		// Cleanup
+		os.Chdir("tests")
+		CleanupSnapshot("production")
+	})
 }

@@ -1,2 +1,0 @@
-database_url: postgres://postgres:postgres@localhost:5432/
-database: lunar_test

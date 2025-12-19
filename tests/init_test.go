@@ -7,15 +7,33 @@ import (
 )
 
 func TestInit(t *testing.T) {
-	command := "cd dummy && go run ../../main.go init -d lunar_test -u postgres://localhost:5432/"
-	err := exec.Command("sh", "-c", command).Run()
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	// Setup test container for database connection testing
+	config := SetupTestContainer(t)
+	defer TeardownTestContainer(t)
 
-	if _, err := os.Stat("dummy/lunar.yml"); os.IsNotExist(err) {
+	// Create dummy directory in parent directory
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir("..")
+
+	os.MkdirAll("dummy", 0755)
+	defer os.RemoveAll("dummy")
+
+	// Change to dummy directory and run init
+	os.Chdir("dummy")
+
+	command := "go run ../main.go init -d lunar_test -u " + config.DatabaseUrl
+	cmd := exec.Command("sh", "-c", command)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Errorf("Command failed with error: %v\nOutput: %s", err, string(output))
+		return
+	}
+	t.Logf("Command output: %s", string(output))
+
+	if _, err := os.Stat("lunar.yml"); os.IsNotExist(err) {
 		t.Errorf("Expected file 'lunar.yml' to exist but it does not.")
 	} else {
-		os.Remove("dummy/lunar.yml")
+		os.Remove("lunar.yml")
 	}
 }

@@ -1,34 +1,37 @@
 package tests
 
 import (
-	"os/exec"
+	"os"
 	"testing"
 
 	"github.com/leonvogt/lunar/internal"
 )
 
 func TestRemove(t *testing.T) {
-	SetupTestDatabase()
+	SetupTestDatabase(t)
+	defer TeardownTestContainer(t)
 
-	// Create a snapshot
-	command := "go run ../main.go snapshot production"
-	err := exec.Command("sh", "-c", command).Run()
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	WithTestDirectory(t, func() {
+		CreateTestSnapshot(t, "production")
 
-	if !internal.DoesDatabaseExists("lunar_snapshot__lunar_test__production") {
-		t.Errorf("Expected database `lunar_snapshot__lunar_test__production` to exist - but it does not")
-	}
+		// Go back to tests directory to check database exists
+		os.Chdir("tests")
+		if !internal.DoesDatabaseExists(SnapshotDatabaseName("production")) {
+			t.Errorf("Expected database `%s` to exist - but it does not", SnapshotDatabaseName("production"))
+		}
 
-	// Remove the snapshot
-	command = "go run ../main.go remove production"
-	err = exec.Command("sh", "-c", command).Run()
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+		// Go back to parent directory for remove command
+		os.Chdir("..")
+		// Remove the snapshot
+		_, err := RunLunarCommand("remove production")
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
 
-	if internal.DoesDatabaseExists("lunar_snapshot__lunar_test__production") {
-		t.Errorf("Expected database `lunar_snapshot__lunar_test__production` to not exist - but it does")
-	}
+		// Go back to tests directory to check database is removed
+		os.Chdir("tests")
+		if internal.DoesDatabaseExists(SnapshotDatabaseName("production")) {
+			t.Errorf("Expected database `%s` to not exist - but it does", SnapshotDatabaseName("production"))
+		}
+	})
 }

@@ -1,30 +1,28 @@
 package tests
 
 import (
-	"os/exec"
+	"os"
 	"testing"
-
-	"github.com/leonvogt/lunar/internal"
 )
 
 func TestSnapshotList(t *testing.T) {
-	SetupTestDatabase()
+	SetupTestDatabase(t)
+	defer TeardownTestContainer(t)
 
-	command := "go run ../main.go snapshot production"
-	err := exec.Command("sh", "-c", command).Run()
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	WithTestDirectory(t, func() {
+		CreateTestSnapshot(t, "production")
 
-	command = "go run ../main.go list"
-	out, err := exec.Command("sh", "-c", command).Output()
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+		out, err := RunLunarCommand("list")
+		if err != nil {
+			t.Errorf("Error running list command: %v", err)
+		}
 
-	if string(out) != "production\n" {
-		t.Errorf("Expected output to be 'production' but got '%s'", string(out))
-	}
+		if string(out) != "production\n" {
+			t.Errorf("Expected output to be 'production' but got '%s'", string(out))
+		}
 
-	internal.DropDatabase("lunar_snapshot__lunar_test__production")
+		// Go back to tests directory for cleanup
+		os.Chdir("tests")
+		CleanupSnapshot("production")
+	})
 }

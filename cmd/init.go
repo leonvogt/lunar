@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/erikgeiser/promptkit/selection"
 	"github.com/erikgeiser/promptkit/textinput"
@@ -38,7 +39,13 @@ func initializeProject() {
 	}
 
 	// Test the connection
-	db, err := internal.OpenDatabaseConnection(config.DatabaseUrl, false)
+	testUrl := config.DatabaseUrl
+	if !strings.HasSuffix(testUrl, "/") {
+		testUrl += "/"
+	}
+	testUrl += "postgres" // Connect to the default postgres database for testing
+
+	db, err := internal.OpenDatabaseConnection(testUrl, false)
 	if err != nil {
 		fmt.Printf("Could not connect to PostgreSQL with the URL %s. Error: %v\n", config.DatabaseUrl, err)
 		return
