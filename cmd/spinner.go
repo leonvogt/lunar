@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -46,7 +45,8 @@ func (m *spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *spinnerModel) View() string {
 	if m.quitting {
-		return ""
+		// Clear the spinner lines when quitting
+		return "\r\033[2K\033[1A\033[2K\033[1A\033[2K"
 	}
 	return fmt.Sprintf("\n\n   %s %s\n\n", m.spinner.View(), m.message)
 }
@@ -55,18 +55,23 @@ func StartSpinner(message string) func() {
 	m := newSpinnerModel(message)
 	p := tea.NewProgram(m)
 
-	// Create a cancellable context
-	_, cancel := context.WithCancel(context.Background())
+	// Channel to wait for the program to finish
+	done := make(chan bool)
 
 	// Run the spinner in a separate goroutine
 	go func() {
+		defer func() {
+			done <- true
+		}()
 		p.Start()
 	}()
 
 	// Return a function to stop the spinner
 	return func() {
 		m.quitting = true
-		cancel() // Cancel the context to stop the spinner
 		p.Quit() // Quit the spinner
+		<-done   // Wait for the spinner to actually finish
+		// Additional cleanup - print a carriage return to ensure clean line
+		fmt.Print("\r")
 	}
 }
