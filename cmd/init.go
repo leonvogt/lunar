@@ -38,28 +38,22 @@ func initializeProject() {
 		config.DatabaseUrl = databaseUrlFlag
 	}
 
-	// Test the connection
+	// Test the connection by trying multiple maintenance databases
 	testUrl := config.DatabaseUrl
 	if !strings.HasSuffix(testUrl, "/") {
 		testUrl += "/"
 	}
-	testUrl += "postgres" // Connect to the default postgres database for testing
 
-	db, err := internal.OpenDatabaseConnection(testUrl, false)
+	db, err := internal.ConnectToMaintenanceDatabaseWithUrl(testUrl)
 	if err != nil {
 		fmt.Printf("Could not connect to PostgreSQL with the URL %s. Error: %v\n", config.DatabaseUrl, err)
+		fmt.Println("Hint: Make sure at least one of the following databases exists and is accessible: postgres, template1")
 		return
 	}
-
 	defer db.Close()
-	if err := internal.TestConnection(db); err != nil {
-		fmt.Printf("Could not connect to PostgreSQL with the URL %s. Error: %v\n", config.DatabaseUrl, err)
-		return
-	}
 
 	if databaseNameFlag == "" {
-		defaultTemplateUrl := config.DatabaseUrl + "template1"
-		config.DatabaseName = askForDatabaseName(defaultTemplateUrl)
+		config.DatabaseName = askForDatabaseName(config.DatabaseUrl)
 	} else {
 		config.DatabaseName = databaseNameFlag
 	}
@@ -85,9 +79,9 @@ func askForDatabaseUrl() string {
 func askForDatabaseName(databaseUrl string) string {
 	fmt.Println("")
 
-	db, err := internal.OpenDatabaseConnection(databaseUrl, false)
+	db, err := internal.ConnectToMaintenanceDatabaseWithUrl(databaseUrl)
 	if err != nil {
-		fmt.Printf("Could not connect to PostgreSQL with the URL %s. Error: %v\n", databaseUrl, err)
+		fmt.Printf("Could not connect to PostgreSQL. Error: %v\n", err)
 		os.Exit(1)
 	}
 

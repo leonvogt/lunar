@@ -73,12 +73,71 @@ func ConnectToDatabase(databaseName string) *sql.DB {
 	return db
 }
 
-func ConnectToTemplateDatabase() *sql.DB {
-	return ConnectToDatabase("template1")
+// ConnectToMaintenanceDatabase connects to a maintenance database for administrative operations.
+// It tries the configured maintenance_database first, then falls back to postgres and template1.
+func ConnectToMaintenanceDatabase() *sql.DB {
+	config, err := ReadConfig()
+	if err != nil {
+		panic(fmt.Errorf("failed to read config: %v", err))
+	}
+
+	// Build list of databases to try
+	databasesToTry := []string{}
+	if config.GetMaintenanceDatabase() != "" {
+		databasesToTry = append(databasesToTry, config.GetMaintenanceDatabase())
+	}
+	databasesToTry = append(databasesToTry, DefaultMaintenanceDatabases()...)
+
+	var lastErr error
+	for _, dbName := range databasesToTry {
+		db, err := OpenDatabaseConnection(config.DatabaseUrl+dbName, false)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Test the connection
+		if err := db.Ping(); err != nil {
+			db.Close()
+			lastErr = err
+			continue
+		}
+
+		return db
+	}
+
+	panic(fmt.Errorf("failed to connect to any maintenance database (tried: %v): %v", databasesToTry, lastErr))
 }
 
+// ConnectToMaintenanceDatabaseWithUrl connects to a maintenance database using a specific URL.
+// Useful during initialization when config may not exist yet.
+func ConnectToMaintenanceDatabaseWithUrl(databaseUrl string) (*sql.DB, error) {
+	for _, dbName := range DefaultMaintenanceDatabases() {
+		db, err := OpenDatabaseConnection(databaseUrl+dbName, false)
+		if err != nil {
+			continue
+		}
+
+		// Test the connection
+		if err := db.Ping(); err != nil {
+			db.Close()
+			continue
+		}
+
+		return db, nil
+	}
+
+	return nil, fmt.Errorf("failed to connect to any maintenance database (tried: %v)", DefaultMaintenanceDatabases())
+}
+
+// Deprecated: Use ConnectToMaintenanceDatabase instead
+func ConnectToTemplateDatabase() *sql.DB {
+	return ConnectToMaintenanceDatabase()
+}
+
+// Deprecated: Use ConnectToMaintenanceDatabase instead
 func ConnectToPostgresDatabase() *sql.DB {
-	return ConnectToDatabase("postgres")
+	return ConnectToMaintenanceDatabase()
 }
 
 func TerminateAllCurrentConnections(databaseName string) error {
