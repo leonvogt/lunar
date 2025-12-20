@@ -14,7 +14,7 @@ builds:
       - -s -w -X github.com/leonvogt/lunar/cmd.version={{.Version}}
 
 archives:
-  - format: tar.gz
+  - formats: [tar.gz]
     # this name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
       {{ .ProjectName }}_
@@ -26,7 +26,7 @@ archives:
     # use zip for windows archives
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
 changelog:
   sort: asc
@@ -37,7 +37,7 @@ changelog:
       - "^chore:"
       - "^ci:"
 
-brews:
+homebrew_casks:
   - name: lunar-db
     license: "MIT"
     homepage: "https://github.com/leonvogt/lunar"
@@ -47,6 +47,7 @@ brews:
       owner: leonvogt
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      branch: main
 
 release:
   footer: |
