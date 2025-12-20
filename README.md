@@ -2,6 +2,13 @@
 
 A tool for creating and restoring snapshots of PostgreSQL databases.
 
+## Installation
+
+Using Homebrew:
+```bash
+brew install leonvogt/tap/lunar-db
+```
+
 ## Configuration
 
 Lunar uses a `lunar.yml` configuration file. Run `lunar init` to create one interactively, or create it manually:
