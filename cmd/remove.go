@@ -86,7 +86,6 @@ func removeSnapshotByName(snapshotManager *internal.Manager, snapshotName string
 	// Also remove the _copy version if it exists
 	copySnapshotName := snapshotName + "_copy"
 	if err := snapshotManager.CheckIfSnapshotExists(copySnapshotName); err == nil {
-		fmt.Printf("Also removing temporary snapshot %s...\n", copySnapshotName)
 		if err := snapshotManager.RemoveSnapshot(copySnapshotName); err != nil {
 			fmt.Printf("Warning: Could not remove temporary snapshot: %v\n", err)
 		}
