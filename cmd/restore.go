@@ -9,7 +9,7 @@ import (
 
 var (
 	restoreCmd = &cobra.Command{
-		Use:   "restore",
+		Use:   "restore [snapshot]",
 		Short: "Restore a snapshot of your database",
 		Run: func(_ *cobra.Command, args []string) {
 			if err := restoreSnapshot(args); err != nil {
@@ -32,14 +32,9 @@ func init() {
 }
 
 func restoreSnapshot(args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("please provide a snapshot name")
-	}
-
-	snapshotName := args[0]
-
 	return withSnapshotManager(func(manager *internal.Manager, config *internal.Config) error {
-		if err := manager.CheckIfSnapshotExists(snapshotName); err != nil {
+		snapshotName, err := getSnapshotNameFromArgsOrPrompt(args, manager, "Please select a snapshot to restore:")
+		if err != nil {
 			return err
 		}
 

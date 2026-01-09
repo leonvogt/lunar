@@ -5,10 +5,11 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/erikgeiser/promptkit/selection"
 	"github.com/leonvogt/lunar/internal"
 )
 
-// withSnapshotManager handles the common pattern of checking config, creating a manager,
+// Handles the common pattern of checking config, creating a manager,
 // and ensuring cleanup. It calls the provided function with the manager and config.
 func withSnapshotManager(operation func(manager *internal.Manager, config *internal.Config) error) error {
 	if !internal.DoesConfigExist() {
@@ -27,6 +28,46 @@ func withSnapshotManager(operation func(manager *internal.Manager, config *inter
 	defer snapshotManager.Close()
 
 	return operation(snapshotManager, config)
+}
+
+func selectSnapshot(manager *internal.Manager, promptMessage string) (string, error) {
+	snapshots, err := manager.ListSnapshots()
+	if err != nil {
+		return "", fmt.Errorf("error listing snapshots: %v", err)
+	}
+
+	if len(snapshots) == 0 {
+		return "", fmt.Errorf("no snapshots found")
+	}
+
+	snapshotNames := make([]string, len(snapshots))
+	for i, snapshot := range snapshots {
+		snapshotNames[i] = snapshot.Name
+	}
+
+	prompt := selection.New(promptMessage, snapshotNames)
+	prompt.PageSize = 50
+
+	selectedSnapshot, err := prompt.RunPrompt()
+	if err != nil {
+		return "", err
+	}
+
+	return selectedSnapshot, nil
+}
+
+// Returns the snapshot name from args if provided,
+// otherwise prompts the user to select one.
+func getSnapshotNameFromArgsOrPrompt(args []string, manager *internal.Manager, promptMessage string) (string, error) {
+	if len(args) >= 1 {
+		snapshotName := args[0]
+		if err := manager.CheckIfSnapshotExists(snapshotName); err != nil {
+			return "", err
+		}
+		return snapshotName, nil
+	}
+
+	return selectSnapshot(manager, promptMessage)
 }
 
 // spawnBackgroundCommand starts a background process with the given arguments.

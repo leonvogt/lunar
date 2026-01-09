@@ -9,8 +9,8 @@ import (
 
 var (
 	replaceCmd = &cobra.Command{
-		Use:   "replace",
-		Short: "Replaces a snapshot",
+		Use:   "replace [snapshot]",
+		Short: "Replaces a snapshot (Delete previously existing snapshot and create a new one with the same name)",
 		Run: func(_ *cobra.Command, args []string) {
 			if err := replaceSnapshot(args); err != nil {
 				fmt.Println(err)
@@ -20,13 +20,12 @@ var (
 )
 
 func replaceSnapshot(args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("please provide a snapshot name")
-	}
-
-	snapshotName := args[0]
-
 	return withSnapshotManager(func(manager *internal.Manager, config *internal.Config) error {
+		snapshotName, err := getSnapshotNameFromArgsOrPrompt(args, manager, "Please select a snapshot to replace:")
+		if err != nil {
+			return err
+		}
+
 		if manager.IsWaitingForOperation() {
 			stopWaitSpinner := StartSpinner("Currently there is a Lunar background operation running. Waiting for it to complete before replacing the snapshot...")
 			if err := manager.WaitForOngoingOperations(); err != nil {
