@@ -241,17 +241,17 @@ func (manager *Manager) RestoreSnapshot(snapshotName string) error {
 	snapshotDatabaseName := SnapshotDatabaseName(databaseName, snapshotName)
 	snapshotCopyDatabaseName := snapshotDatabaseName + "_copy"
 
-	// Check if the _copy database exists (required for fast restore)
-	if !DoesDatabaseExists(snapshotCopyDatabaseName) {
-		return fmt.Errorf("snapshot copy %s does not exist. The snapshot may still be initializing or was not created properly", snapshotName)
-	}
-
-	// Check for ongoing operations on this database
+	// Check for ongoing operations on this database (e.g., _copy being created)
 	if manager.IsOperationInProgress(databaseName) {
-		fmt.Println("Waiting for ongoing operation to complete...")
+		fmt.Println("Currently there is a Lunar background operation running. Waiting for it to complete before restoring the snapshot...")
 		if err := manager.WaitForOngoingOperation(databaseName, 30*time.Minute); err != nil {
 			return fmt.Errorf("failed to wait for ongoing operation: %v", err)
 		}
+	}
+
+	// Check if the _copy database exists (required for fast restore)
+	if !DoesDatabaseExists(snapshotCopyDatabaseName) {
+		return fmt.Errorf("snapshot copy %s does not exist. The snapshot may still be initializing or was not created properly", snapshotName)
 	}
 
 	// Acquire lock for the restore operation
@@ -283,6 +283,12 @@ func (manager *Manager) RecreateSnapshotCopy(snapshotName string) error {
 	databaseName := manager.config.DatabaseName
 	snapshotDatabaseName := SnapshotDatabaseName(databaseName, snapshotName)
 	snapshotCopyDatabaseName := snapshotDatabaseName + "_copy"
+
+	// Acquire operation lock so other operations (like restore) wait for us
+	if err := manager.MarkOperationStart(databaseName); err != nil {
+		return fmt.Errorf("failed to acquire operation lock: %v", err)
+	}
+	defer manager.MarkOperationFinish(databaseName)
 
 	// Terminate any connections to the snapshot (needed for template usage)
 	if err := TerminateAllCurrentConnections(snapshotDatabaseName); err != nil {
@@ -323,7 +329,7 @@ func (manager *Manager) ReplaceSnapshot(snapshotName string) error {
 
 	// Check for ongoing operations on this database
 	if manager.IsOperationInProgress(databaseName) {
-		fmt.Println("Waiting for ongoing operation to complete...")
+		fmt.Println("Currently there is a Lunar background operation running. Waiting for it to complete before replacing the snapshot...")
 		if err := manager.WaitForOngoingOperation(databaseName, 30*time.Minute); err != nil {
 			return fmt.Errorf("failed to wait for ongoing operation: %v", err)
 		}
