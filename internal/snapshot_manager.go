@@ -8,12 +8,6 @@ import (
 	"time"
 )
 
-// OperationStatus represents the status of a snapshot operation
-type OperationStatus struct {
-	WaitingForOperation bool
-	WaitingForSnapshot  bool
-}
-
 // Manager handles database snapshot operations and locking
 type Manager struct {
 	dbConnection *sql.DB
@@ -36,34 +30,19 @@ func (manager *Manager) Close() error {
 	return manager.dbConnection.Close()
 }
 
-func (manager *Manager) CheckIfSnapshotCanBeTaken(snapshotName string) (OperationStatus, error) {
-	status := OperationStatus{}
+func (manager *Manager) CheckIfSnapshotCanBeTaken(snapshotName string) error {
 	databaseName := manager.config.DatabaseName
 	snapshotDatabaseName := SnapshotDatabaseName(databaseName, snapshotName)
 
 	exists, err := DoesDatabaseExist(snapshotDatabaseName)
 	if err != nil {
-		return status, err
+		return err
 	}
 	if exists {
-		return status, fmt.Errorf("snapshot with name %s already exists", snapshotName)
+		return fmt.Errorf("snapshot with name %s already exists", snapshotName)
 	}
 
-	if manager.IsOperationInProgress(databaseName) {
-		status.WaitingForOperation = true
-		if err := manager.WaitForOngoingOperation(databaseName, 30*time.Minute); err != nil {
-			return status, fmt.Errorf("failed to wait for ongoing operation: %v", err)
-		}
-	}
-
-	if manager.IsSnapshotInProgress(snapshotName) {
-		status.WaitingForSnapshot = true
-		if err := manager.WaitForOngoingSnapshot(snapshotName, 30*time.Minute); err != nil {
-			return status, fmt.Errorf("failed to wait for ongoing snapshot: %v", err)
-		}
-	}
-
-	return status, nil
+	return nil
 }
 
 func (manager *Manager) CreateMainSnapshot(snapshotName string) error {
@@ -169,6 +148,20 @@ func (manager *Manager) operationLockID(databaseName string) int64 {
 	return int64(crc32.ChecksumIEEE([]byte("op:" + databaseName)))
 }
 
+// IsWaitingForOperation checks if there's an ongoing operation that we'd need to wait for.
+func (manager *Manager) IsWaitingForOperation() bool {
+	return manager.IsOperationInProgress(manager.config.DatabaseName)
+}
+
+// WaitForOngoingOperations waits for any ongoing operations to complete.
+func (manager *Manager) WaitForOngoingOperations() error {
+	databaseName := manager.config.DatabaseName
+	if err := manager.WaitForOngoingOperation(databaseName, 30*time.Minute); err != nil {
+		return fmt.Errorf("failed to wait for ongoing operation: %v", err)
+	}
+	return nil
+}
+
 // IsOperationInProgress checks if any operation is currently running on the database
 func (manager *Manager) IsOperationInProgress(databaseName string) bool {
 	lockID := manager.operationLockID(databaseName)
@@ -247,54 +240,46 @@ func (manager *Manager) CheckIfSnapshotExists(snapshotName string) error {
 	return nil
 }
 
-func (manager *Manager) RestoreSnapshot(snapshotName string) (OperationStatus, error) {
-	status := OperationStatus{}
+func (manager *Manager) RestoreSnapshot(snapshotName string) error {
 	databaseName := manager.config.DatabaseName
 	snapshotDatabaseName := SnapshotDatabaseName(databaseName, snapshotName)
 	snapshotCopyDatabaseName := SnapshotCopyDatabaseName(databaseName, snapshotName)
 
-	if manager.IsOperationInProgress(databaseName) {
-		status.WaitingForOperation = true
-		if err := manager.WaitForOngoingOperation(databaseName, 30*time.Minute); err != nil {
-			return status, fmt.Errorf("failed to wait for ongoing operation: %v", err)
-		}
-	}
-
 	copyExists, err := DoesDatabaseExist(snapshotCopyDatabaseName)
 	if err != nil {
-		return status, err
+		return err
 	}
 	if !copyExists {
-		return status, fmt.Errorf("snapshot copy %s does not exist. The snapshot may still be initializing or was not created properly", snapshotName)
+		return fmt.Errorf("snapshot copy %s does not exist. The snapshot may still be initializing or was not created properly", snapshotName)
 	}
 
 	if err := manager.MarkOperationStart(databaseName); err != nil {
-		return status, fmt.Errorf("failed to acquire operation lock: %v", err)
+		return fmt.Errorf("failed to acquire operation lock: %v", err)
 	}
 	defer manager.MarkOperationFinish(databaseName)
 
 	if err := TerminateAllCurrentConnections(databaseName); err != nil {
-		return status, fmt.Errorf("failed to terminate connections to database: %v", err)
+		return fmt.Errorf("failed to terminate connections to database: %v", err)
 	}
 
 	if err := TerminateAllCurrentConnections(snapshotCopyDatabaseName); err != nil {
-		return status, fmt.Errorf("failed to terminate connections to snapshot copy: %v", err)
+		return fmt.Errorf("failed to terminate connections to snapshot copy: %v", err)
 	}
 
 	if err := RestoreSnapshot(databaseName, snapshotCopyDatabaseName); err != nil {
-		return status, fmt.Errorf("failed to restore snapshot: %v", err)
+		return fmt.Errorf("failed to restore snapshot: %v", err)
 	}
 
 	// Verify the main snapshot still exists after restore
 	snapshotExists, err := DoesDatabaseExist(snapshotDatabaseName)
 	if err != nil {
-		return status, fmt.Errorf("failed to verify snapshot: %v", err)
+		return fmt.Errorf("failed to verify snapshot: %v", err)
 	}
 	if !snapshotExists {
-		return status, fmt.Errorf("snapshot %s no longer exists after restore", snapshotName)
+		return fmt.Errorf("snapshot %s no longer exists after restore", snapshotName)
 	}
 
-	return status, nil
+	return nil
 }
 
 func (manager *Manager) CreateSnapshotCopy(snapshotName string) error {
@@ -349,49 +334,34 @@ func (manager *Manager) RemoveSnapshot(snapshotName string) error {
 	return nil
 }
 
-func (manager *Manager) ReplaceSnapshot(snapshotName string) (OperationStatus, error) {
-	status := OperationStatus{}
+func (manager *Manager) ReplaceSnapshot(snapshotName string) error {
 	databaseName := manager.config.DatabaseName
 
 	if err := manager.CheckIfSnapshotExists(snapshotName); err != nil {
-		return status, err
-	}
-
-	if manager.IsOperationInProgress(databaseName) {
-		status.WaitingForOperation = true
-		if err := manager.WaitForOngoingOperation(databaseName, 30*time.Minute); err != nil {
-			return status, fmt.Errorf("failed to wait for ongoing operation: %v", err)
-		}
-	}
-
-	if manager.IsSnapshotInProgress(snapshotName) {
-		status.WaitingForSnapshot = true
-		if err := manager.WaitForOngoingSnapshot(snapshotName, 30*time.Minute); err != nil {
-			return status, fmt.Errorf("failed to wait for ongoing snapshot: %v", err)
-		}
+		return err
 	}
 
 	if err := manager.MarkOperationStart(databaseName); err != nil {
-		return status, fmt.Errorf("failed to acquire operation lock: %v", err)
+		return fmt.Errorf("failed to acquire operation lock: %v", err)
 	}
 	defer manager.MarkOperationFinish(databaseName)
 
 	if err := manager.RemoveSnapshot(snapshotName); err != nil {
-		return status, fmt.Errorf("failed to remove existing snapshot: %v", err)
+		return fmt.Errorf("failed to remove existing snapshot: %v", err)
 	}
 
 	snapshotDatabaseName := SnapshotDatabaseName(databaseName, snapshotName)
 
 	if err := manager.MarkSnapshotStart(snapshotName); err != nil {
-		return status, fmt.Errorf("failed to mark snapshot start: %v", err)
+		return fmt.Errorf("failed to mark snapshot start: %v", err)
 	}
 	defer manager.MarkSnapshotFinish(snapshotName)
 
 	if err := manager.createDatabaseCopy(databaseName, snapshotDatabaseName); err != nil {
-		return status, fmt.Errorf("failed to create new snapshot: %v", err)
+		return fmt.Errorf("failed to create new snapshot: %v", err)
 	}
 
-	return status, nil
+	return nil
 }
 
 func (manager *Manager) ListSnapshots() ([]string, error) {

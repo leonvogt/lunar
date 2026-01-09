@@ -40,11 +40,19 @@ func createSnapshot(args []string) error {
 	snapshotName := args[0]
 
 	return withSnapshotManager(func(manager *internal.Manager, config *internal.Config) error {
-		status, err := manager.CheckIfSnapshotCanBeTaken(snapshotName)
-		if err != nil {
+		if err := manager.CheckIfSnapshotCanBeTaken(snapshotName); err != nil {
 			return err
 		}
-		printWaitingStatus(status)
+
+		// Check and wait for any ongoing operations
+		if manager.IsWaitingForOperation() {
+			stopWaitSpinner := StartSpinner("Currently there is a Lunar background operation running. Waiting for it to complete before creating the snapshot...")
+			if err := manager.WaitForOngoingOperations(); err != nil {
+				stopWaitSpinner()
+				return fmt.Errorf("failed to wait for ongoing operation: %v", err)
+			}
+			stopWaitSpinner()
+		}
 
 		message := fmt.Sprintf("Creating a snapshot for the database %s", config.DatabaseName)
 		stopSpinner := StartSpinner(message)

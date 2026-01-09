@@ -48,13 +48,3 @@ func spawnBackgroundCommand(args ...string) error {
 
 	return nil
 }
-
-// printWaitingStatus prints appropriate waiting messages based on operation status
-func printWaitingStatus(status internal.OperationStatus) {
-	if status.WaitingForOperation {
-		fmt.Println("Waiting for ongoing operation to complete...")
-	}
-	if status.WaitingForSnapshot {
-		fmt.Println("Waiting for ongoing snapshot to complete...")
-	}
-}

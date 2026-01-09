@@ -43,15 +43,23 @@ func restoreSnapshot(args []string) error {
 			return err
 		}
 
+		// Check and wait for any ongoing operations
+		if manager.IsWaitingForOperation() {
+			stopWaitSpinner := StartSpinner("Currently there is a Lunar background operation running. Waiting for it to complete before restoring the snapshot...")
+			if err := manager.WaitForOngoingOperations(); err != nil {
+				stopWaitSpinner()
+				return fmt.Errorf("failed to wait for ongoing operation: %v", err)
+			}
+			stopWaitSpinner()
+		}
+
 		message := fmt.Sprintf("Restoring snapshot %s for database %s", snapshotName, config.DatabaseName)
 		stopSpinner := StartSpinner(message)
 
-		status, err := manager.RestoreSnapshot(snapshotName)
-		if err != nil {
+		if err := manager.RestoreSnapshot(snapshotName); err != nil {
 			stopSpinner()
 			return fmt.Errorf("error restoring snapshot: %v", err)
 		}
-		printWaitingStatus(status)
 
 		stopSpinner()
 		fmt.Println("Snapshot restored successfully")
