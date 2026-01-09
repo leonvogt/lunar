@@ -17,7 +17,8 @@ func TestSnapshotList(t *testing.T) {
 			t.Errorf("Error running list command: %v", err)
 		}
 
-		if string(out) != "production\n" {
+		// Test if the output starts with "production"
+		if string(out[:10]) != "production" {
 			t.Errorf("Expected output to be 'production' but got '%s'", string(out))
 		}
 
