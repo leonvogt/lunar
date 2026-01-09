@@ -239,6 +239,12 @@ func (manager *Manager) CheckIfSnapshotExists(snapshotName string) error {
 func (manager *Manager) RestoreSnapshot(snapshotName string) error {
 	databaseName := manager.config.DatabaseName
 	snapshotDatabaseName := SnapshotDatabaseName(databaseName, snapshotName)
+	snapshotCopyDatabaseName := snapshotDatabaseName + "_copy"
+
+	// Check if the _copy database exists (required for fast restore)
+	if !DoesDatabaseExists(snapshotCopyDatabaseName) {
+		return fmt.Errorf("snapshot copy %s does not exist. The snapshot may still be initializing or was not created properly", snapshotName)
+	}
 
 	// Check for ongoing operations on this database
 	if manager.IsOperationInProgress(databaseName) {
@@ -254,17 +260,38 @@ func (manager *Manager) RestoreSnapshot(snapshotName string) error {
 	}
 	defer manager.MarkOperationFinish(databaseName)
 
-	// Terminate all connections to both databases
+	// Terminate all connections to the target database and the _copy database
 	if err := TerminateAllCurrentConnections(databaseName); err != nil {
 		return fmt.Errorf("failed to terminate connections to database: %v", err)
 	}
 
+	if err := TerminateAllCurrentConnections(snapshotCopyDatabaseName); err != nil {
+		return fmt.Errorf("failed to terminate connections to snapshot copy: %v", err)
+	}
+
+	// Fast restore: drop target DB and rename _copy to target
+	if err := RestoreSnapshot(databaseName, snapshotCopyDatabaseName); err != nil {
+		return fmt.Errorf("failed to restore snapshot: %v", err)
+	}
+
+	return nil
+}
+
+// RecreateSnapshotCopy creates a new _copy database from the snapshot in the background
+// This prepares for the next restore operation
+func (manager *Manager) RecreateSnapshotCopy(snapshotName string) error {
+	databaseName := manager.config.DatabaseName
+	snapshotDatabaseName := SnapshotDatabaseName(databaseName, snapshotName)
+	snapshotCopyDatabaseName := snapshotDatabaseName + "_copy"
+
+	// Terminate any connections to the snapshot (needed for template usage)
 	if err := TerminateAllCurrentConnections(snapshotDatabaseName); err != nil {
 		return fmt.Errorf("failed to terminate connections to snapshot: %v", err)
 	}
 
-	if err := RestoreSnapshot(databaseName, snapshotDatabaseName); err != nil {
-		return fmt.Errorf("failed to restore snapshot: %v", err)
+	// Create a new _copy from the snapshot
+	if err := manager.CreateSnapshot(snapshotDatabaseName, snapshotCopyDatabaseName); err != nil {
+		return fmt.Errorf("failed to recreate snapshot copy: %v", err)
 	}
 
 	return nil

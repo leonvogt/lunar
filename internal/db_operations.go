@@ -214,15 +214,23 @@ func DropDatabase(databaseName string) {
 	}
 }
 
-func RestoreSnapshot(databaseName, snapshotName string) error {
-	DropDatabase(databaseName)
-
+func RenameDatabase(oldName, newName string) error {
 	db := ConnectToTemplateDatabase()
 	defer db.Close()
 
 	// Note: PostgreSQL doesn't support parameterized DDL for database names
-	_, err := db.Exec("CREATE DATABASE " + databaseName + " TEMPLATE " + snapshotName)
+	_, err := db.Exec("ALTER DATABASE " + oldName + " RENAME TO " + newName)
 	if err != nil {
+		return fmt.Errorf("failed to rename database: %v", err)
+	}
+	return nil
+}
+
+func RestoreSnapshot(databaseName, snapshotCopyName string) error {
+	DropDatabase(databaseName)
+
+	// Rename the _copy database to the target database for instant restore
+	if err := RenameDatabase(snapshotCopyName, databaseName); err != nil {
 		return fmt.Errorf("failed to restore snapshot: %v", err)
 	}
 
