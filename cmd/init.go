@@ -92,7 +92,18 @@ func askForDatabaseName(databaseUrl string) string {
 		os.Exit(1)
 	}
 
-	prompt := selection.New("Please enter the name of the database you want to snapshot", databaseNames)
+	filteredDatabaseNames := make([]string, 0)
+	for _, name := range databaseNames {
+		if name == "postgres" {
+			continue
+		}
+		if strings.HasPrefix(name, "lunar_snapshot____") {
+			continue
+		}
+		filteredDatabaseNames = append(filteredDatabaseNames, name)
+	}
+
+	prompt := selection.New("Please enter the name of the database you want to snapshot", filteredDatabaseNames)
 	prompt.PageSize = 50
 
 	databaseName, err := prompt.RunPrompt()
