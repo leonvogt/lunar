@@ -63,7 +63,7 @@ func StartSpinner(message string) func() {
 		defer func() {
 			done <- true
 		}()
-		p.Start()
+		p.Run()
 	}()
 
 	// Return a function to stop the spinner
