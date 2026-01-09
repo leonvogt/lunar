@@ -364,7 +364,30 @@ func (manager *Manager) ReplaceSnapshot(snapshotName string) error {
 	return nil
 }
 
-func (manager *Manager) ListSnapshots() ([]string, error) {
+type SnapshotInfo struct {
+	Name string
+	Age  time.Duration
+}
+
+func (manager *Manager) ListSnapshots() ([]SnapshotInfo, error) {
 	databaseName := manager.config.DatabaseName
-	return SnapshotDatabasesForDatabase(databaseName)
+	snapshotNames, err := SnapshotDatabasesForDatabase(databaseName)
+	if err != nil {
+		return nil, err
+	}
+
+	snapshots := make([]SnapshotInfo, 0, len(snapshotNames))
+	for _, name := range snapshotNames {
+		snapshotDBName := SnapshotDatabaseName(databaseName, name)
+		creationTime, err := GetDatabaseAge(manager.dbConnection, snapshotDBName)
+		if err != nil {
+			snapshots = append(snapshots, SnapshotInfo{Name: name, Age: 0})
+			continue
+		}
+
+		age := time.Since(creationTime)
+		snapshots = append(snapshots, SnapshotInfo{Name: name, Age: age})
+	}
+
+	return snapshots, nil
 }

@@ -42,7 +42,12 @@ func removeSnapshot(args []string) error {
 			return nil
 		}
 
-		prompt := selection.New("Please select a snapshot to remove:", snapshots)
+		snapshotNames := make([]string, len(snapshots))
+		for i, snapshot := range snapshots {
+			snapshotNames[i] = snapshot.Name
+		}
+
+		prompt := selection.New("Please select a snapshot to remove:", snapshotNames)
 		prompt.PageSize = 50
 
 		selectedSnapshot, err := prompt.RunPrompt()

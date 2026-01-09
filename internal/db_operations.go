@@ -32,6 +32,21 @@ func AllDatabases(database *sql.DB) ([]string, error) {
 	return databases, nil
 }
 
+func GetDatabaseAge(database *sql.DB, databaseName string) (time.Time, error) {
+	var creationTime time.Time
+	query := `
+		SELECT (pg_stat_file('base/'|| oid ||'/PG_VERSION')).modification
+		FROM pg_database
+		WHERE datname = $1`
+
+	err := database.QueryRow(query, databaseName).Scan(&creationTime)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get database age: %v", err)
+	}
+
+	return creationTime, nil
+}
+
 func AllSnapshotDatabases() ([]string, error) {
 	database, err := ConnectToMaintenanceDatabase()
 	if err != nil {
