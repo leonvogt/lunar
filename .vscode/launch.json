@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch: Lunar",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": []
+    },
+    {
+      "name": "Debug: Restore command",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "restore",
+        "${input:snapshotName}"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "snapshotName",
+      "type": "promptString",
+      "description": "Snapshot name to restore",
+      "default": "production"
+    }
+  ]
+}
