@@ -88,14 +88,17 @@ func TeardownTestContainer(t *testing.T) {
 func SetupTestDatabase(t *testing.T) {
 	config := SetupTestContainer(t)
 
-	// Override the internal package's database connection to use our test container
 	os.Setenv("TEST_DATABASE_URL", config.DatabaseUrl)
 	os.Setenv("TEST_DATABASE_NAME", config.DatabaseName)
 
-	db := internal.ConnectToDatabase("lunar_test")
-	defer db.Close()
-	CreateUsersTable("lunar_test", db)
-	InsertUsers("lunar_test", db)
+	database, err := internal.ConnectToDatabase("lunar_test")
+	if err != nil {
+		t.Fatalf("Failed to connect to test database: %v", err)
+	}
+	defer database.Close()
+
+	CreateUsersTable("lunar_test", database)
+	InsertUsers("lunar_test", database)
 }
 
 func CreateUsersTable(databaseName string, db *sql.DB) {
@@ -169,6 +172,7 @@ func SnapshotDatabaseName(snapshotName string) string {
 
 func CleanupSnapshot(snapshotName string) {
 	internal.DropDatabase(SnapshotDatabaseName(snapshotName))
+	internal.DropDatabase(SnapshotDatabaseName(snapshotName) + "_copy")
 }
 
 func WithTestDirectory(t *testing.T, testFunc func()) {

@@ -79,17 +79,23 @@ func askForDatabaseUrl() string {
 func askForDatabaseName(databaseUrl string) string {
 	fmt.Println("")
 
-	db, err := internal.ConnectToMaintenanceDatabaseWithUrl(databaseUrl)
+	database, err := internal.ConnectToMaintenanceDatabaseWithUrl(databaseUrl)
 	if err != nil {
 		fmt.Printf("Could not connect to PostgreSQL. Error: %v\n", err)
 		os.Exit(1)
 	}
+	defer database.Close()
 
-	databaseNames := internal.AllDatabases(db)
-	sp := selection.New("Please enter the name of the database you want to snapshot", databaseNames)
-	sp.PageSize = 50
+	databaseNames, err := internal.AllDatabases(database)
+	if err != nil {
+		fmt.Printf("Could not list databases. Error: %v\n", err)
+		os.Exit(1)
+	}
 
-	databaseName, err := sp.RunPrompt()
+	prompt := selection.New("Please enter the name of the database you want to snapshot", databaseNames)
+	prompt.PageSize = 50
+
+	databaseName, err := prompt.RunPrompt()
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)

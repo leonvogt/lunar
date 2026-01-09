@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 
 	"github.com/leonvogt/lunar/internal"
 	"github.com/spf13/cobra"
@@ -14,11 +12,12 @@ var (
 		Use:   "restore",
 		Short: "Restore a snapshot of your database",
 		Run: func(_ *cobra.Command, args []string) {
-			restoreSnapshot(args)
+			if err := restoreSnapshot(args); err != nil {
+				fmt.Println(err)
+			}
 		},
 	}
 
-	// Hidden command to recreate snapshot copy in background
 	recreateCopyCmd = &cobra.Command{
 		Use:    "recreate-copy",
 		Hidden: true,
@@ -32,60 +31,39 @@ func init() {
 	restoreCmd.AddCommand(recreateCopyCmd)
 }
 
-func restoreSnapshot(args []string) {
-	if !internal.DoesConfigExist() {
-		fmt.Println("There seems to be no configuration file. Please run 'lunar init' first.")
-		return
-	}
-
+func restoreSnapshot(args []string) error {
 	if len(args) != 1 {
-		fmt.Println("Please provide a snapshot name.")
-		return
+		return fmt.Errorf("please provide a snapshot name")
 	}
 
 	snapshotName := args[0]
-	config, _ := internal.ReadConfig()
-	snapshotManager, err := internal.SnapshotManager(config)
-	if err != nil {
-		fmt.Printf("Error initializing snapshot manager: %v\n", err)
-		return
-	}
-	defer snapshotManager.Close()
 
-	if err := snapshotManager.CheckIfSnapshotExists(snapshotName); err != nil {
-		fmt.Println(err)
-		return
-	}
+	return withSnapshotManager(func(manager *internal.Manager, config *internal.Config) error {
+		if err := manager.CheckIfSnapshotExists(snapshotName); err != nil {
+			return err
+		}
 
-	message := fmt.Sprintf("Restoring snapshot %s for database %s", snapshotName, config.DatabaseName)
-	stopSpinner := StartSpinner(message)
+		message := fmt.Sprintf("Restoring snapshot %s for database %s", snapshotName, config.DatabaseName)
+		stopSpinner := StartSpinner(message)
 
-	if err := snapshotManager.RestoreSnapshot(snapshotName); err != nil {
+		status, err := manager.RestoreSnapshot(snapshotName)
+		if err != nil {
+			stopSpinner()
+			return fmt.Errorf("error restoring snapshot: %v", err)
+		}
+		printWaitingStatus(status)
+
 		stopSpinner()
-		fmt.Printf("Error restoring snapshot: %v\n", err)
-		return
-	}
+		fmt.Println("Snapshot restored successfully")
 
-	stopSpinner()
-	fmt.Println("Snapshot restored successfully")
+		if err := spawnBackgroundCommand("restore", "recreate-copy", snapshotName); err != nil {
+			fmt.Printf("Warning: Could not prepare snapshot for next restore: %v\n", err)
+		}
 
-	// Spawn a background process to recreate the _copy database
-	executable, err := os.Executable()
-	if err != nil {
-		fmt.Printf("Warning: Could not prepare snapshot for next restore: %v\n", err)
-		return
-	}
-
-	cmd := exec.Command(executable, "restore", "recreate-copy", snapshotName)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	cmd.Stdin = nil
-	if err := cmd.Start(); err != nil {
-		fmt.Printf("Warning: Could not prepare snapshot for next restore: %v\n", err)
-	}
+		return nil
+	})
 }
 
-// recreateSnapshotCopy is called as a subprocess to recreate the _copy database
 func recreateSnapshotCopy(args []string) {
 	if len(args) != 1 {
 		return
@@ -97,11 +75,11 @@ func recreateSnapshotCopy(args []string) {
 		return
 	}
 
-	snapshotManager, err := internal.SnapshotManager(config)
+	snapshotManager, err := internal.NewSnapshotManager(config)
 	if err != nil {
 		return
 	}
 	defer snapshotManager.Close()
 
-	snapshotManager.RecreateSnapshotCopy(snapshotName)
+	snapshotManager.CreateSnapshotCopy(snapshotName)
 }

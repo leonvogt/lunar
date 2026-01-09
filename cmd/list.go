@@ -12,42 +12,29 @@ var (
 		Use:   "list",
 		Short: "List all snapshots",
 		Run: func(_ *cobra.Command, args []string) {
-			listSnapshots()
+			if err := listSnapshots(); err != nil {
+				fmt.Println(err)
+			}
 		},
 	}
 )
 
-func listSnapshots() {
-	if !internal.DoesConfigExist() {
-		fmt.Println("There seems to be no configuration file. Please run 'lunar init' first.")
-		return
-	}
+func listSnapshots() error {
+	return withSnapshotManager(func(manager *internal.Manager, config *internal.Config) error {
+		snapshots, err := manager.ListSnapshots()
+		if err != nil {
+			return fmt.Errorf("error listing snapshots: %v", err)
+		}
 
-	config, err := internal.ReadConfig()
-	if err != nil {
-		fmt.Printf("Error reading config: %v\n", err)
-		return
-	}
+		if len(snapshots) == 0 {
+			fmt.Println("No snapshots found.")
+			return nil
+		}
 
-	snapshotManager, err := internal.SnapshotManager(config)
-	if err != nil {
-		fmt.Printf("Error initializing snapshot manager: %v\n", err)
-		return
-	}
-	defer snapshotManager.Close()
+		for _, snapshot := range snapshots {
+			fmt.Println(snapshot)
+		}
 
-	snapshots, err := snapshotManager.ListSnapshots()
-	if err != nil {
-		fmt.Printf("Error listing snapshots: %v\n", err)
-		return
-	}
-
-	if len(snapshots) == 0 {
-		fmt.Println("No snapshots found.")
-		return
-	}
-
-	for _, snapshot := range snapshots {
-		fmt.Println(snapshot)
-	}
+		return nil
+	})
 }

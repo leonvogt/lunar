@@ -12,45 +12,38 @@ var (
 		Use:   "replace",
 		Short: "Replaces a snapshot",
 		Run: func(_ *cobra.Command, args []string) {
-			replaceSnapshot(args)
+			if err := replaceSnapshot(args); err != nil {
+				fmt.Println(err)
+			}
 		},
 	}
 )
 
-func replaceSnapshot(args []string) {
-	if !internal.DoesConfigExist() {
-		fmt.Println("There seems to be no configuration file. Please run 'lunar init' first.")
-		return
-	}
-
+func replaceSnapshot(args []string) error {
 	if len(args) != 1 {
-		fmt.Println("Please provide a snapshot name.")
-		return
+		return fmt.Errorf("please provide a snapshot name")
 	}
 
 	snapshotName := args[0]
-	config, err := internal.ReadConfig()
-	if err != nil {
-		fmt.Printf("Error reading config: %v\n", err)
-		return
-	}
-	snapshotManager, err := internal.SnapshotManager(config)
-	if err != nil {
-		fmt.Printf("Error initializing snapshot manager: %v\n", err)
-		return
-	}
-	defer snapshotManager.Close()
 
-	message := fmt.Sprintf("Replacing snapshot %s for database %s", snapshotName, config.DatabaseName)
-	stopSpinner := StartSpinner(message)
+	return withSnapshotManager(func(manager *internal.Manager, config *internal.Config) error {
+		message := fmt.Sprintf("Replacing snapshot %s for database %s", snapshotName, config.DatabaseName)
+		stopSpinner := StartSpinner(message)
 
-	// Replace the snapshot using the snapshot manager
-	if err := snapshotManager.ReplaceSnapshot(snapshotName); err != nil {
+		status, err := manager.ReplaceSnapshot(snapshotName)
+		if err != nil {
+			stopSpinner()
+			return fmt.Errorf("error replacing snapshot: %v", err)
+		}
+		printWaitingStatus(status)
+
 		stopSpinner()
-		fmt.Printf("Error replacing snapshot: %v\n", err)
-		return
-	}
+		fmt.Println("Snapshot replaced successfully")
 
-	stopSpinner()
-	fmt.Println("Snapshot replaced successfully")
+		if err := spawnBackgroundCommand("snapshot", "create-copy", snapshotName); err != nil {
+			fmt.Printf("Warning: Could not prepare snapshot for fast restore: %v\n", err)
+		}
+
+		return nil
+	})
 }

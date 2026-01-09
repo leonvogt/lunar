@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -11,17 +10,19 @@ func SnapshotDatabaseName(databaseName, userProvidedSnapshotName string) string 
 	return "lunar_snapshot" + SEPARATOR + databaseName + SEPARATOR + userProvidedSnapshotName
 }
 
-func SnapshotDatabasesForDatabase(databaseName string) []string {
-	snapshots := make([]string, 0)
+func SnapshotCopyDatabaseName(databaseName, snapshotName string) string {
+	return SnapshotDatabaseName(databaseName, snapshotName) + "_copy"
+}
+
+func SnapshotDatabasesForDatabase(databaseName string) ([]string, error) {
 	allLunarSnapshotDatabases, err := AllSnapshotDatabases()
 	if err != nil {
-		fmt.Printf("Error getting snapshot databases: %v\n", err)
-		return snapshots
+		return nil, err
 	}
-	for _, db := range allLunarSnapshotDatabases {
-		// Split the database name from the snapshot name, by splitting at the SEPARATOR
-		// The first part is the database name, the second part is the snapshot name
-		parts := strings.Split(db, SEPARATOR)
+
+	snapshots := make([]string, 0)
+	for _, snapshotDatabase := range allLunarSnapshotDatabases {
+		parts := strings.Split(snapshotDatabase, SEPARATOR)
 
 		if len(parts) >= 3 && parts[1] == databaseName {
 			snapshotName := parts[2]
@@ -31,5 +32,5 @@ func SnapshotDatabasesForDatabase(databaseName string) []string {
 		}
 	}
 
-	return snapshots
+	return snapshots, nil
 }

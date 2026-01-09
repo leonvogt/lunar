@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 
 	"github.com/leonvogt/lunar/internal"
 	"github.com/spf13/cobra"
@@ -15,11 +13,12 @@ var (
 		Aliases: []string{"snap"},
 		Short:   "Create a snapshot of your database",
 		Run: func(_ *cobra.Command, args []string) {
-			createSnapshot(args)
+			if err := createSnapshot(args); err != nil {
+				fmt.Println(err)
+			}
 		},
 	}
 
-	// Hidden command to create snapshot copy in background
 	createCopyCmd = &cobra.Command{
 		Use:    "create-copy",
 		Hidden: true,
@@ -33,64 +32,39 @@ func init() {
 	snapshotCmd.AddCommand(createCopyCmd)
 }
 
-func createSnapshot(args []string) {
-	if !internal.DoesConfigExist() {
-		fmt.Println("There seems to be no configuration file. Please run 'lunar init' first")
-		return
-	}
-
+func createSnapshot(args []string) error {
 	if len(args) != 1 {
-		fmt.Println("Please provide a name for the snapshot. Like `lunar snapshot production` or `lunar snapshot staging`")
-		return
+		return fmt.Errorf("please provide a name for the snapshot. Like `lunar snapshot production` or `lunar snapshot staging`")
 	}
 
 	snapshotName := args[0]
-	config, err := internal.ReadConfig()
-	if err != nil {
-		fmt.Printf("Error reading config: %v\n", err)
-		return
-	}
-	snapshotManager, err := internal.SnapshotManager(config)
-	if err != nil {
-		fmt.Printf("Error initializing snapshot manager: %v\n", err)
-		return
-	}
-	defer snapshotManager.Close()
 
-	if err := snapshotManager.CheckIfSnapshotCanBeTaken(snapshotName); err != nil {
-		fmt.Println(err)
-		return
-	}
+	return withSnapshotManager(func(manager *internal.Manager, config *internal.Config) error {
+		status, err := manager.CheckIfSnapshotCanBeTaken(snapshotName)
+		if err != nil {
+			return err
+		}
+		printWaitingStatus(status)
 
-	message := fmt.Sprintf("Creating a snapshot for the database %s", config.DatabaseName)
-	stopSpinner := StartSpinner(message)
+		message := fmt.Sprintf("Creating a snapshot for the database %s", config.DatabaseName)
+		stopSpinner := StartSpinner(message)
 
-	if err := snapshotManager.StartSnapshotprocess(snapshotName); err != nil {
+		if err := manager.CreateMainSnapshot(snapshotName); err != nil {
+			stopSpinner()
+			return fmt.Errorf("error creating snapshot: %v", err)
+		}
+
 		stopSpinner()
-		fmt.Printf("Error creating snapshot: %v\n", err)
-		return
-	}
+		fmt.Println("Snapshot created successfully")
 
-	stopSpinner()
-	fmt.Println("Snapshot created successfully")
+		if err := spawnBackgroundCommand("snapshot", "create-copy", snapshotName); err != nil {
+			fmt.Printf("Warning: Could not prepare snapshot for fast restore: %v\n", err)
+		}
 
-	// Spawn a background process to create the _copy database
-	executable, err := os.Executable()
-	if err != nil {
-		fmt.Printf("Warning: Could not prepare snapshot for fast restore: %v\n", err)
-		return
-	}
-
-	cmd := exec.Command(executable, "snapshot", "create-copy", snapshotName)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	cmd.Stdin = nil
-	if err := cmd.Start(); err != nil {
-		fmt.Printf("Warning: Could not prepare snapshot for fast restore: %v\n", err)
-	}
+		return nil
+	})
 }
 
-// createSnapshotCopy is called as a subprocess to create the _copy database
 func createSnapshotCopy(args []string) {
 	if len(args) != 1 {
 		return
@@ -102,11 +76,11 @@ func createSnapshotCopy(args []string) {
 		return
 	}
 
-	snapshotManager, err := internal.SnapshotManager(config)
+	snapshotManager, err := internal.NewSnapshotManager(config)
 	if err != nil {
 		return
 	}
 	defer snapshotManager.Close()
 
-	snapshotManager.RecreateSnapshotCopy(snapshotName)
+	snapshotManager.CreateSnapshotCopy(snapshotName)
 }

@@ -3,45 +3,53 @@ package internal
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 
 	_ "github.com/lib/pq"
 )
 
-func AllDatabases(db *sql.DB) []string {
+func AllDatabases(database *sql.DB) ([]string, error) {
 	databases := make([]string, 0)
 
-	rows, err := db.Query("SELECT datname FROM pg_database WHERE datistemplate = false")
+	rows, err := database.Query("SELECT datname FROM pg_database WHERE datistemplate = false")
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to query databases: %v", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var database string
-		err := rows.Scan(&database)
-		if err != nil {
-			panic(err)
+		var databaseName string
+		if err := rows.Scan(&databaseName); err != nil {
+			return nil, fmt.Errorf("failed to scan database name: %v", err)
 		}
-		databases = append(databases, database)
+		databases = append(databases, databaseName)
 	}
 
-	return databases
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating database rows: %v", err)
+	}
+
+	return databases, nil
 }
 
 func AllSnapshotDatabases() ([]string, error) {
-	db := ConnectToTemplateDatabase()
-	defer db.Close()
+	database, err := ConnectToMaintenanceDatabase()
+	if err != nil {
+		return nil, err
+	}
+	defer database.Close()
 
-	databases := AllDatabases(db)
+	databases, err := AllDatabases(database)
+	if err != nil {
+		return nil, err
+	}
+
 	snapshotDatabases := make([]string, 0)
-
 	expectedPrefix := "lunar_snapshot" + SEPARATOR
 
-	for _, database := range databases {
-		if len(database) >= len(expectedPrefix) && database[:len(expectedPrefix)] == expectedPrefix {
-			snapshotDatabases = append(snapshotDatabases, database)
+	for _, databaseName := range databases {
+		if len(databaseName) >= len(expectedPrefix) && databaseName[:len(expectedPrefix)] == expectedPrefix {
+			snapshotDatabases = append(snapshotDatabases, databaseName)
 		}
 	}
 
@@ -53,37 +61,36 @@ func OpenDatabaseConnection(databaseUrl string, sslMode bool) (*sql.DB, error) {
 		databaseUrl += "?sslmode=disable"
 	}
 
-	db, err := sql.Open("postgres", databaseUrl)
+	database, err := sql.Open("postgres", databaseUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database connection: %v", err)
 	}
 
-	return db, nil
+	return database, nil
 }
 
-func ConnectToDatabase(databaseName string) *sql.DB {
+func ConnectToDatabase(databaseName string) (*sql.DB, error) {
 	config, err := ReadConfig()
 	if err != nil {
-		panic(fmt.Errorf("failed to read config: %v", err))
+		return nil, fmt.Errorf("failed to read config: %v", err)
 	}
 
-	databaseUrl := config.DatabaseUrl
-	db, err := OpenDatabaseConnection(databaseUrl+databaseName, false)
+	database, err := OpenDatabaseConnection(config.DatabaseUrl+databaseName, false)
 	if err != nil {
-		panic(fmt.Errorf("failed to connect to database: %v", err))
+		return nil, fmt.Errorf("failed to connect to database: %v", err)
 	}
-	return db
+
+	return database, nil
 }
 
 // ConnectToMaintenanceDatabase connects to a maintenance database for administrative operations.
 // It tries the configured maintenance_database first, then falls back to postgres and template1.
-func ConnectToMaintenanceDatabase() *sql.DB {
+func ConnectToMaintenanceDatabase() (*sql.DB, error) {
 	config, err := ReadConfig()
 	if err != nil {
-		panic(fmt.Errorf("failed to read config: %v", err))
+		return nil, fmt.Errorf("failed to read config: %v", err)
 	}
 
-	// Build list of databases to try
 	databasesToTry := []string{}
 	if config.GetMaintenanceDatabase() != "" {
 		databasesToTry = append(databasesToTry, config.GetMaintenanceDatabase())
@@ -91,60 +98,51 @@ func ConnectToMaintenanceDatabase() *sql.DB {
 	databasesToTry = append(databasesToTry, DefaultMaintenanceDatabases()...)
 
 	var lastErr error
-	for _, dbName := range databasesToTry {
-		db, err := OpenDatabaseConnection(config.DatabaseUrl+dbName, false)
+	for _, databaseName := range databasesToTry {
+		database, err := OpenDatabaseConnection(config.DatabaseUrl+databaseName, false)
 		if err != nil {
 			lastErr = err
 			continue
 		}
 
-		// Test the connection
-		if err := db.Ping(); err != nil {
-			db.Close()
+		if err := database.Ping(); err != nil {
+			database.Close()
 			lastErr = err
 			continue
 		}
 
-		return db
+		return database, nil
 	}
 
-	panic(fmt.Errorf("failed to connect to any maintenance database (tried: %v): %v", databasesToTry, lastErr))
+	return nil, fmt.Errorf("failed to connect to any maintenance database (tried: %v): %v", databasesToTry, lastErr)
 }
 
 // ConnectToMaintenanceDatabaseWithUrl connects to a maintenance database using a specific URL.
 // Useful during initialization when config may not exist yet.
 func ConnectToMaintenanceDatabaseWithUrl(databaseUrl string) (*sql.DB, error) {
-	for _, dbName := range DefaultMaintenanceDatabases() {
-		db, err := OpenDatabaseConnection(databaseUrl+dbName, false)
+	for _, databaseName := range DefaultMaintenanceDatabases() {
+		database, err := OpenDatabaseConnection(databaseUrl+databaseName, false)
 		if err != nil {
 			continue
 		}
 
-		// Test the connection
-		if err := db.Ping(); err != nil {
-			db.Close()
+		if err := database.Ping(); err != nil {
+			database.Close()
 			continue
 		}
 
-		return db, nil
+		return database, nil
 	}
 
 	return nil, fmt.Errorf("failed to connect to any maintenance database (tried: %v)", DefaultMaintenanceDatabases())
 }
 
-// Deprecated: Use ConnectToMaintenanceDatabase instead
-func ConnectToTemplateDatabase() *sql.DB {
-	return ConnectToMaintenanceDatabase()
-}
-
-// Deprecated: Use ConnectToMaintenanceDatabase instead
-func ConnectToPostgresDatabase() *sql.DB {
-	return ConnectToMaintenanceDatabase()
-}
-
 func TerminateAllCurrentConnections(databaseName string) error {
-	db := ConnectToTemplateDatabase()
-	defer db.Close()
+	database, err := ConnectToMaintenanceDatabase()
+	if err != nil {
+		return err
+	}
+	defer database.Close()
 
 	query := `
 		SELECT pg_terminate_backend(pid)
@@ -152,74 +150,86 @@ func TerminateAllCurrentConnections(databaseName string) error {
 		WHERE datname = $1
 		AND pid <> pg_backend_pid()`
 
-	_, err := db.Exec(query, databaseName)
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err = database.Exec(query, databaseName)
+	return err
 }
 
-func DoesDatabaseExists(databaseName string) bool {
-	db := ConnectToTemplateDatabase()
-	defer db.Close()
+func DoesDatabaseExist(databaseName string) (bool, error) {
+	database, err := ConnectToMaintenanceDatabase()
+	if err != nil {
+		return false, err
+	}
+	defer database.Close()
 
 	var exists bool
-	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", databaseName).Scan(&exists)
+	err = database.QueryRow("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", databaseName).Scan(&exists)
 	if err != nil {
-		log.Fatal(err)
+		return false, fmt.Errorf("failed to check database existence: %v", err)
 	}
 
-	return exists
+	return exists, nil
 }
 
-func TestConnection(db *sql.DB) error {
-	db.SetConnMaxLifetime(5 * time.Second)
+func TestConnection(database *sql.DB) error {
+	database.SetConnMaxLifetime(5 * time.Second)
 
-	err := db.Ping()
-	if err != nil {
+	if err := database.Ping(); err != nil {
 		return fmt.Errorf("failed to connect to database: %v", err)
 	}
 
 	return nil
 }
 
-func CreateDatabase(databaseName string) {
+func CreateDatabase(databaseName string) error {
 	TerminateAllCurrentConnections("template1")
-	db := ConnectToTemplateDatabase()
-	defer db.Close()
 
-	_, err := db.Exec("CREATE DATABASE " + databaseName)
+	database, err := ConnectToMaintenanceDatabase()
 	if err != nil {
-		panic(err)
+		return err
 	}
+	defer database.Close()
+
+	_, err = database.Exec("CREATE DATABASE " + databaseName)
+	if err != nil {
+		return fmt.Errorf("failed to create database: %v", err)
+	}
+
+	return nil
 }
 
-func CreateDatabaseWithTemplate(db *sql.DB, databaseName, templateDatabaseName string) error {
-	_, err := db.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", databaseName, templateDatabaseName))
+func CreateDatabaseWithTemplate(database *sql.DB, databaseName, templateDatabaseName string) error {
+	_, err := database.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", databaseName, templateDatabaseName))
 	if err != nil {
 		return fmt.Errorf("failed to create database: %v", err)
 	}
 	return nil
 }
 
-func DropDatabase(databaseName string) {
-	db := ConnectToTemplateDatabase()
-	defer db.Close()
+func DropDatabase(databaseName string) error {
+	database, err := ConnectToMaintenanceDatabase()
+	if err != nil {
+		return err
+	}
+	defer database.Close()
 
 	// Note: PostgreSQL doesn't support parameterized DDL for database names
 	// The databaseName comes from internal snapshot naming, not user input
-	_, err := db.Exec("DROP DATABASE IF EXISTS " + databaseName)
+	_, err = database.Exec("DROP DATABASE IF EXISTS " + databaseName)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to drop database: %v", err)
 	}
+
+	return nil
 }
 
 func RenameDatabase(oldName, newName string) error {
-	db := ConnectToTemplateDatabase()
-	defer db.Close()
+	database, err := ConnectToMaintenanceDatabase()
+	if err != nil {
+		return err
+	}
+	defer database.Close()
 
-	// Note: PostgreSQL doesn't support parameterized DDL for database names
-	_, err := db.Exec("ALTER DATABASE " + oldName + " RENAME TO " + newName)
+	_, err = database.Exec("ALTER DATABASE " + oldName + " RENAME TO " + newName)
 	if err != nil {
 		return fmt.Errorf("failed to rename database: %v", err)
 	}
@@ -227,9 +237,10 @@ func RenameDatabase(oldName, newName string) error {
 }
 
 func RestoreSnapshot(databaseName, snapshotCopyName string) error {
-	DropDatabase(databaseName)
+	if err := DropDatabase(databaseName); err != nil {
+		return err
+	}
 
-	// Rename the _copy database to the target database for instant restore
 	if err := RenameDatabase(snapshotCopyName, databaseName); err != nil {
 		return fmt.Errorf("failed to restore snapshot: %v", err)
 	}
