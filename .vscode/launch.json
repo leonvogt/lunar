@@ -23,6 +23,18 @@
         "restore",
         "${input:snapshotName}"
       ]
+    },
+    {
+      "name": "Debug: List command",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "list"
+      ]
     }
   ],
   "inputs": [
