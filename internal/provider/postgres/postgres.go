@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"hash/crc32"
+	"net/url"
 	"strings"
 	"time"
 
@@ -513,7 +514,7 @@ func connectToMaintenanceDatabase(config *Config) (*sql.DB, error) {
 }
 
 func openDatabaseConnection(databaseURL string) (*sql.DB, error) {
-	databaseURL += "?sslmode=disable"
+	databaseURL = ensureSSLModeDefault(databaseURL)
 
 	db, err := sql.Open("postgres", databaseURL)
 	if err != nil {
@@ -521,6 +522,28 @@ func openDatabaseConnection(databaseURL string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+func ensureSSLModeDefault(databaseURL string) string {
+	parsed, err := url.Parse(databaseURL)
+	if err != nil {
+		if strings.Contains(databaseURL, "sslmode=") {
+			return databaseURL
+		}
+		if strings.Contains(databaseURL, "?") {
+			return databaseURL + "&sslmode=disable"
+		}
+		return databaseURL + "?sslmode=disable"
+	}
+
+	query := parsed.Query()
+	if query.Get("sslmode") == "" {
+		query.Set("sslmode", "disable")
+		parsed.RawQuery = query.Encode()
+		return parsed.String()
+	}
+
+	return databaseURL
 }
 
 // ConnectToMaintenanceDatabaseWithURL connects to a maintenance database using a specific URL.
