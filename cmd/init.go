@@ -26,7 +26,7 @@ var (
 )
 
 func initializeProject() {
-	if internal.DoesConfigExist() {
+	if internal.DoesConfigExistInCurrentDir() {
 		fmt.Println("There already is a lunar.yml file in this directory. Please remove it if you want to start over.")
 		return
 	}
