@@ -1,12 +1,12 @@
 <p align="center">
-  <picture >
+  <picture>
     <source height="200" srcset="https://github.com/user-attachments/assets/2ae5cdae-dd08-4da0-8786-68547fcabe49">
-    <img height="200" alt="Expo Orbit" src="https://github.com/user-attachments/assets/2ae5cdae-dd08-4da0-8786-68547fcabe49">
+    <img height="200" alt="Lunar Logo" src="https://github.com/user-attachments/assets/2ae5cdae-dd08-4da0-8786-68547fcabe49">
   </picture>
   <h1 align="center">Lunar</h1>
 </p>
 
-A tool for creating and restoring snapshots of PostgreSQL and SQLite databases.
+<p align="center">A fast database snapshot tool for PostgreSQL and SQLite. Create, restore, and manage database snapshots.</p>
 
 ## Installation
 
@@ -15,7 +15,31 @@ Using Homebrew:
 brew install leonvogt/tap/lunar-db
 ```
 
-Other platforms: Download the latest release binaries from the [Releases page](https://github.com/leonvogt/lunar/releases). Each release contains platform-specific files for manual installation.
+Other platforms: Download the latest release binaries from the [Releases page](https://github.com/leonvogt/lunar/releases).
+
+## Background
+
+Lunar is a reimplementation of [Stellar](https://github.com/fastmonkeys/stellar), designed to make database snapshots and restoration lightning-fast during development.  
+It's perfect for quickly iterating on schema changes, switching branches, or experimenting locally.
+
+**Key Differences from Stellar**:
+
+- PostgreSQL and SQLite support (Stellar supports PostgreSQL and partial MySQL)
+- Cross-platform binaries with no language runtime setup required
+
+## How It Works
+
+### PostgreSQL
+Lunar leverages PostgreSQL's `CREATE DATABASE ... TEMPLATE` feature to create efficient database copies. Restoring a snapshot performs a fast rename operation rather than slow SQL dumps and imports.
+
+### SQLite
+Snapshots are simple file copies of the SQLite database. The tool automatically handles WAL (Write-Ahead Logging) files for databases using WAL mode.
+
+> [!NOTE]  
+> Snapshots are full database copies and can consume significant disk space. Monitor your snapshot count to prevent storage issues.
+
+> [!IMPORTANT]  
+> Lunar is intended for development use only. Do not use it if you cannot afford data loss.
 
 ## Quick Start
 
@@ -32,7 +56,7 @@ lunar list
 # Restore a snapshot
 lunar restore production
 
-# Replace a snapshot (delete and recreate)
+# Replace an existing snapshot
 lunar replace production
 
 # Remove a snapshot
@@ -43,26 +67,23 @@ lunar remove production
 
 Lunar uses a `lunar.yml` configuration file. Run `lunar init` to create one interactively, or create it manually.
 
-### PostgreSQL Configuration
+### PostgreSQL
 
 ```yaml
 database_url: postgres://localhost:5432/
 database: my_database
-
-# Optional: specify a maintenance database for administrative operations
-# If not set, lunar will try 'postgres' first, then 'template1'
-# maintenance_database: postgres
 ```
 
-#### PostgreSQL Options
+#### Options
 
 | Option | Required | Description |
 |--------|----------|-------------|
-| `database_url` | Yes | PostgreSQL connection URL (without database name) |
+| `provider` | No | Set to `postgres` (default if omitted) |
+| `database_url` | Yes | PostgreSQL connection URL without database name |
 | `database` | Yes | Name of the database to snapshot |
-| `maintenance_database` | No | Database to use for admin operations (default: tries `postgres`, then `template1`) |
+| `maintenance_database` | No | Database for admin operations (default: tries `postgres`, then `template1`) |
 
-### SQLite Configuration
+### SQLite
 
 ```yaml
 provider: sqlite
@@ -70,9 +91,7 @@ database_path: ./myapp.db
 snapshot_directory: ./.lunar_snapshots
 ```
 
-> **Note:** Paths are relative to the `lunar.yml` file location, making configs portable across machines and team members.
-
-#### SQLite Options
+#### Options
 
 | Option | Required | Description |
 |--------|----------|-------------|
@@ -80,13 +99,8 @@ snapshot_directory: ./.lunar_snapshots
 | `database_path` | Yes | Path to the SQLite database file (relative or absolute) |
 | `snapshot_directory` | No | Directory to store snapshots (default: `.lunar_snapshots` next to database) |
 
-## How It Works
+> **Note:** Paths are relative to the `lunar.yml` file location
 
-### PostgreSQL
-Snapshots are created using PostgreSQL's `CREATE DATABASE ... TEMPLATE` feature, which creates an efficient copy of the database. Restoring a snapshot replaces the current database with the snapshot copy.
-
-### SQLite
-Snapshots are simple file copies of the SQLite database file. The tool handles WAL (Write-Ahead Logging) files automatically for databases using WAL mode.
 
 ## Development
 
@@ -96,14 +110,10 @@ Snapshots are simple file copies of the SQLite database file. The tool handles W
 go build -o lunar .
 ```
 
-This creates a `lunar` executable in the current directory that you can use to test in other projects:
+This creates a `lunar` executable in the current directory. You can test it in other projects by specifying the path to this binary:
 
 ```bash
-# Use with full path
 /path/to/lunar/lunar init
-
-# Or install globally
-go install .
 ```
 
 **Run tests:**
@@ -129,3 +139,7 @@ go test ./tests -run "Postgres"
 ```bash
 go test -run TestInit ./tests/
 ```
+
+---
+
+Lunar is inspired by [Stellar](https://github.com/fastmonkeys/stellar) and its approach to fast database snapshots. Many thanks to the Stellar project for the ideas that guided Lunar's design.
