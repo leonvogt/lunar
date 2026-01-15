@@ -204,7 +204,7 @@ func CreateDatabase(databaseName string) error {
 	}
 	defer database.Close()
 
-	_, err = database.Exec("CREATE DATABASE " + databaseName)
+	_, err = database.Exec("CREATE DATABASE \"" + databaseName + "\"")
 	if err != nil {
 		return fmt.Errorf("failed to create database: %v", err)
 	}
@@ -213,7 +213,7 @@ func CreateDatabase(databaseName string) error {
 }
 
 func CreateDatabaseWithTemplate(database *sql.DB, databaseName, templateDatabaseName string) error {
-	_, err := database.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", databaseName, templateDatabaseName))
+	_, err := database.Exec(fmt.Sprintf("CREATE DATABASE \"%s\" TEMPLATE \"%s\"", databaseName, templateDatabaseName))
 	if err != nil {
 		return fmt.Errorf("failed to create database: %v", err)
 	}
