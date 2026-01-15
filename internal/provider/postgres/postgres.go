@@ -153,7 +153,6 @@ func (p *Provider) RestoreSnapshot(snapshotName string) error {
 		return fmt.Errorf("failed to restore snapshot: %v", err)
 	}
 
-	// Verify the main snapshot still exists after restore
 	snapshotExists, err := p.doesDatabaseExist(snapshotDBName)
 	if err != nil {
 		return fmt.Errorf("failed to verify snapshot: %v", err)
@@ -381,7 +380,7 @@ func (p *Provider) doesDatabaseExist(databaseName string) (bool, error) {
 }
 
 func (p *Provider) dropDatabase(databaseName string) error {
-	_, err := p.dbConnection.Exec("DROP DATABASE IF EXISTS " + databaseName)
+	_, err := p.dbConnection.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS \"%s\"", databaseName))
 	if err != nil {
 		return fmt.Errorf("failed to drop database: %v", err)
 	}
@@ -389,7 +388,7 @@ func (p *Provider) dropDatabase(databaseName string) error {
 }
 
 func (p *Provider) renameDatabase(oldName, newName string) error {
-	_, err := p.dbConnection.Exec("ALTER DATABASE " + oldName + " RENAME TO " + newName)
+	_, err := p.dbConnection.Exec(fmt.Sprintf("ALTER DATABASE \"%s\" RENAME TO \"%s\"", oldName, newName))
 	if err != nil {
 		return fmt.Errorf("failed to rename database: %v", err)
 	}

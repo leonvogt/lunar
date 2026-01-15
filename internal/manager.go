@@ -5,6 +5,7 @@ import (
 
 	"github.com/leonvogt/lunar/internal/provider"
 	"github.com/leonvogt/lunar/internal/provider/postgres"
+	"github.com/leonvogt/lunar/internal/provider/sqlite"
 )
 
 type Manager struct {
@@ -33,7 +34,10 @@ func createProvider(config *Config) (provider.Provider, error) {
 			MaintenanceDatabase: config.MaintenanceDatabase,
 		})
 	case provider.ProviderTypeSQLite:
-		return nil, fmt.Errorf("SQLite provider not yet implemented")
+		return sqlite.New(&sqlite.Config{
+			DatabasePath:      config.GetResolvedDatabasePath(),
+			SnapshotDirectory: config.GetResolvedSnapshotDirectory(),
+		})
 	default:
 		return nil, fmt.Errorf("unknown provider type: %s", config.GetProviderType())
 	}

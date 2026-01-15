@@ -5,33 +5,86 @@ import (
 	"testing"
 )
 
-func TestReplace(t *testing.T) {
+// ============================================================================
+// PostgreSQL Replace Tests
+// ============================================================================
+
+func TestPostgres_Replace(t *testing.T) {
+	const snapshotName = "pg-replace-test"
+
 	SetupTestDatabase(t)
 	defer TeardownTestContainer(t)
 
 	WithTestDirectory(t, func() {
-		CreateTestSnapshot(t, "production")
+		CreateTestSnapshot(t, snapshotName)
 
-		// Go back to tests directory to check database exists
 		os.Chdir("tests")
-		exists, err := DoesDatabaseExist(SnapshotDatabaseName("production"))
+		exists, err := DoesDatabaseExist(SnapshotDatabaseName(snapshotName))
 		if err != nil {
 			t.Fatalf("Error checking database existence: %v", err)
 		}
 		if !exists {
-			t.Errorf("Expected database `%s` to exist - but it does not", SnapshotDatabaseName("production"))
+			t.Errorf("Expected database `%s` to exist - but it does not", SnapshotDatabaseName(snapshotName))
 		}
 
-		// Go back to parent directory for replace command
 		os.Chdir("..")
 		// Replace the snapshot
-		_, err = RunLunarCommand("replace production")
+		_, err = RunLunarCommand("replace " + snapshotName)
 		if err != nil {
-			t.Errorf("Error: %v", err)
+			t.Errorf("Error replacing snapshot: %v", err)
 		}
 
-		// Cleanup
+		// Verify snapshot still exists after replace
 		os.Chdir("tests")
-		CleanupSnapshot("production")
+		exists, err = DoesDatabaseExist(SnapshotDatabaseName(snapshotName))
+		if err != nil {
+			t.Fatalf("Error checking database existence: %v", err)
+		}
+		if !exists {
+			t.Errorf("Expected database `%s` to exist after replace - but it does not", SnapshotDatabaseName(snapshotName))
+		}
+
+		CleanupSnapshot(snapshotName)
+	})
+}
+
+// ============================================================================
+// SQLite Replace Tests
+// ============================================================================
+
+func TestSQLite_Replace(t *testing.T) {
+	const snapshotName = "sqlite-replace-test"
+
+	config := SetupSQLiteTestDatabase(t)
+	defer TeardownSQLiteTestDatabase(t)
+
+	WithSQLiteTestDirectory(t, config, func() {
+		CreateTestSnapshot(t, snapshotName)
+
+		exists, err := SQLiteSnapshotExists(snapshotName)
+		if err != nil {
+			t.Fatalf("Error checking snapshot existence: %v", err)
+		}
+		if !exists {
+			t.Errorf("Expected snapshot `%s` to exist - but it does not", snapshotName)
+		}
+
+		// Replace the snapshot
+		_, err = RunLunarCommand("replace " + snapshotName)
+		if err != nil {
+			t.Errorf("Error replacing snapshot: %v", err)
+		}
+
+		// Verify snapshot still exists after replace
+		exists, err = SQLiteSnapshotExists(snapshotName)
+		if err != nil {
+			t.Fatalf("Error checking snapshot existence: %v", err)
+		}
+		if !exists {
+			t.Errorf("Expected snapshot `%s` to exist after replace - but it does not", snapshotName)
+		}
+
+		os.Chdir("tests")
+		CleanupSQLiteSnapshot(snapshotName)
 	})
 }
