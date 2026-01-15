@@ -7,33 +7,48 @@ import (
 )
 
 func TestInit(t *testing.T) {
-	// Setup test container for database connection testing
 	config := SetupTestContainer(t)
 	defer TeardownTestContainer(t)
 
-	// Create dummy directory in parent directory
 	originalDir, _ := os.Getwd()
 	defer os.Chdir(originalDir)
 	os.Chdir("..")
-
 	os.MkdirAll("dummy", 0755)
 	defer os.RemoveAll("dummy")
-
-	// Change to dummy directory and run init
 	os.Chdir("dummy")
 
-	command := "go run ../main.go init -d lunar_test -u " + config.DatabaseUrl
-	cmd := exec.Command("sh", "-c", command)
+	// Test Postgres init
+	pgCmd := "go run ../main.go init --provider postgres -d lunar_test -u '" + config.DatabaseUrl + "'"
+	cmd := exec.Command("sh", "-c", pgCmd)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Errorf("Command failed with error: %v\nOutput: %s", err, string(output))
-		return
+		t.Errorf("Postgres init failed: %v\nOutput: %s", err, string(output))
 	}
-	t.Logf("Command output: %s", string(output))
-
 	if _, err := os.Stat("lunar.yml"); os.IsNotExist(err) {
-		t.Errorf("Expected file 'lunar.yml' to exist but it does not.")
+		t.Errorf("[Postgres] Expected file 'lunar.yml' to exist but it does not.")
 	} else {
 		os.Remove("lunar.yml")
 	}
+
+	// Test SQLite init
+	sqlitePath := "test.db"
+	f, ferr := os.Create(sqlitePath)
+	if ferr != nil {
+		t.Fatalf("Failed to create dummy sqlite file: %v", ferr)
+	}
+	f.Close()
+
+	sqliteCmd := "go run ../main.go init --provider sqlite --database-path '" + sqlitePath + "' --snapshot-directory './.lunar_snapshots'"
+	cmd = exec.Command("sh", "-c", sqliteCmd)
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Errorf("SQLite init failed: %v\nOutput: %s", err, string(output))
+	}
+	if _, err := os.Stat("lunar.yml"); os.IsNotExist(err) {
+		t.Errorf("[SQLite] Expected file 'lunar.yml' to exist but it does not.")
+	} else {
+		os.Remove("lunar.yml")
+	}
+
+	os.Remove(sqlitePath)
 }

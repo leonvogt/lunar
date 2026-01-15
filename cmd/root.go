@@ -8,6 +8,9 @@ import (
 
 var databaseUrlFlag string
 var databaseNameFlag string
+var databasePathFlag string
+var snapshotDirectoryFlag string
+var providerFlag string
 
 var rootCmd = &cobra.Command{
 	Use:     "lunar",
@@ -25,8 +28,11 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(initCmd)
+	initCmd.Flags().StringVar(&providerFlag, "provider", "", "Database provider to use: 'postgres' or 'sqlite'.")
 	initCmd.Flags().StringVarP(&databaseUrlFlag, "database-url", "u", "", "The connection URL to your PostgreSQL database.")
 	initCmd.Flags().StringVarP(&databaseNameFlag, "database-name", "d", "", "The name of the database you want to snapshot.")
+	initCmd.Flags().StringVar(&databasePathFlag, "database-path", "", "Path to the SQLite database file.")
+	initCmd.Flags().StringVar(&snapshotDirectoryFlag, "snapshot-directory", "", "Directory to store SQLite snapshots.")
 
 	rootCmd.AddCommand(snapshotCmd)
 	rootCmd.AddCommand(listCmd)

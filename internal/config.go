@@ -2,6 +2,7 @@ package internal
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/leonvogt/lunar/internal/provider"
 	"gopkg.in/yaml.v3"
@@ -20,7 +21,7 @@ type Config struct {
 	DatabaseName        string `yaml:"database,omitempty"`
 	MaintenanceDatabase string `yaml:"maintenance_database,omitempty"`
 
-	// SQLite configuration (for future use)
+	// SQLite configuration
 	DatabasePath      string `yaml:"database_path,omitempty"`
 	SnapshotDirectory string `yaml:"snapshot_directory,omitempty"`
 }
@@ -50,6 +51,34 @@ func (c *Config) GetDatabaseIdentifier() string {
 	default:
 		return c.DatabaseName
 	}
+}
+
+func (c *Config) GetResolvedDatabasePath() string {
+	return resolvePath(c.DatabasePath)
+}
+
+func (c *Config) GetResolvedSnapshotDirectory() string {
+	return resolvePath(c.SnapshotDirectory)
+}
+
+// Returns an absolute path for the given path
+func resolvePath(path string) string {
+	if path == "" {
+		return path
+	}
+
+	// If already absolute, return as-is
+	if filepath.IsAbs(path) {
+		return path
+	}
+
+	// Get the directory containing the config file
+	configDir, err := os.Getwd()
+	if err != nil {
+		return path
+	}
+
+	return filepath.Join(configDir, path)
 }
 
 func CreateConfigFile(config *Config, path string) error {
