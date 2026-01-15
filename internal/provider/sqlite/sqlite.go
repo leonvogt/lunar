@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/gofrs/flock"
 	"github.com/leonvogt/lunar/internal/provider"
 )
 
@@ -19,7 +19,7 @@ type Config struct {
 
 type Provider struct {
 	config *Config
-	mu     sync.Mutex // For synchronization (replaces PostgreSQL advisory locks)
+	lock   *flock.Flock
 }
 
 func New(config *Config) (*Provider, error) {
@@ -40,8 +40,12 @@ func New(config *Config) (*Provider, error) {
 		return nil, fmt.Errorf("failed to create snapshot directory: %v", err)
 	}
 
+	lockPath := filepath.Join(config.SnapshotDirectory, ".lunar.lock")
+	fileLock := flock.New(lockPath)
+
 	return &Provider{
 		config: config,
+		lock:   fileLock,
 	}, nil
 }
 
@@ -75,106 +79,118 @@ func (p *Provider) CheckIfSnapshotExists(snapshotName string) error {
 }
 
 func (p *Provider) CreateSnapshot(snapshotName string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	return p.withLock(func() error {
+		snapshotPath := p.snapshotPath(snapshotName)
 
-	snapshotPath := p.snapshotPath(snapshotName)
+		if err := copyFile(p.config.DatabasePath, snapshotPath); err != nil {
+			return fmt.Errorf("failed to create snapshot: %v", err)
+		}
 
-	if err := copyFile(p.config.DatabasePath, snapshotPath); err != nil {
-		return fmt.Errorf("failed to create snapshot: %v", err)
-	}
+		p.copyWALFiles(p.config.DatabasePath, snapshotPath)
 
-	p.copyWALFiles(p.config.DatabasePath, snapshotPath)
-
-	return nil
+		return nil
+	})
 }
 
 func (p *Provider) CreateSnapshotCopy(snapshotName string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	return p.withLock(func() error {
+		snapshotPath := p.snapshotPath(snapshotName)
+		copyPath := p.snapshotCopyPath(snapshotName)
 
-	snapshotPath := p.snapshotPath(snapshotName)
-	copyPath := p.snapshotCopyPath(snapshotName)
+		if err := copyFile(snapshotPath, copyPath); err != nil {
+			return fmt.Errorf("failed to create snapshot copy: %v", err)
+		}
 
-	if err := copyFile(snapshotPath, copyPath); err != nil {
-		return fmt.Errorf("failed to create snapshot copy: %v", err)
-	}
+		// Also copy WAL files if they exist
+		p.copyWALFiles(snapshotPath, copyPath)
 
-	// Also copy WAL files if they exist
-	p.copyWALFiles(snapshotPath, copyPath)
-
-	return nil
+		return nil
+	})
 }
 
 func (p *Provider) RestoreSnapshot(snapshotName string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	return p.withLock(func() error {
+		copyPath := p.snapshotCopyPath(snapshotName)
 
-	copyPath := p.snapshotCopyPath(snapshotName)
+		if _, err := os.Stat(copyPath); os.IsNotExist(err) {
+			return fmt.Errorf("snapshot copy %s does not exist. The snapshot may still be initializing or was not created properly", snapshotName)
+		}
 
-	if _, err := os.Stat(copyPath); os.IsNotExist(err) {
-		return fmt.Errorf("snapshot copy %s does not exist. The snapshot may still be initializing or was not created properly", snapshotName)
-	}
+		if err := os.Remove(p.config.DatabasePath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove current database: %v", err)
+		}
 
-	if err := os.Remove(p.config.DatabasePath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove current database: %v", err)
-	}
+		// Remove WAL and SHM files if they exist
+		os.Remove(p.config.DatabasePath + "-wal")
+		os.Remove(p.config.DatabasePath + "-shm")
 
-	// Remove WAL and SHM files if they exist
-	os.Remove(p.config.DatabasePath + "-wal")
-	os.Remove(p.config.DatabasePath + "-shm")
+		if err := copyFile(copyPath, p.config.DatabasePath); err != nil {
+			return fmt.Errorf("failed to restore snapshot: %v", err)
+		}
 
-	if err := copyFile(copyPath, p.config.DatabasePath); err != nil {
-		return fmt.Errorf("failed to restore snapshot: %v", err)
-	}
+		// Copy WAL files if they exist
+		p.copyWALFiles(copyPath, p.config.DatabasePath)
 
-	// Copy WAL files if they exist
-	p.copyWALFiles(copyPath, p.config.DatabasePath)
+		// Remove the copy file after restore (it will be recreated)
+		os.Remove(copyPath)
+		os.Remove(copyPath + "-wal")
+		os.Remove(copyPath + "-shm")
 
-	// Remove the copy file after restore (it will be recreated)
-	os.Remove(copyPath)
-	os.Remove(copyPath + "-wal")
-	os.Remove(copyPath + "-shm")
+		snapshotPath := p.snapshotPath(snapshotName)
+		if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+			return fmt.Errorf("snapshot %s no longer exists after restore", snapshotName)
+		}
 
-	snapshotPath := p.snapshotPath(snapshotName)
-	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
-		return fmt.Errorf("snapshot %s no longer exists after restore", snapshotName)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (p *Provider) RemoveSnapshot(snapshotName string) error {
-	snapshotPath := p.snapshotPath(snapshotName)
-	copyPath := p.snapshotCopyPath(snapshotName)
+	return p.withLock(func() error {
+		snapshotPath := p.snapshotPath(snapshotName)
+		copyPath := p.snapshotCopyPath(snapshotName)
 
-	if err := os.Remove(snapshotPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove snapshot: %v", err)
-	}
+		if err := os.Remove(snapshotPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove snapshot: %v", err)
+		}
 
-	os.Remove(snapshotPath + "-wal")
-	os.Remove(snapshotPath + "-shm")
-	os.Remove(copyPath)
-	os.Remove(copyPath + "-wal")
-	os.Remove(copyPath + "-shm")
+		os.Remove(snapshotPath + "-wal")
+		os.Remove(snapshotPath + "-shm")
+		os.Remove(copyPath)
+		os.Remove(copyPath + "-wal")
+		os.Remove(copyPath + "-shm")
 
-	return nil
+		return nil
+	})
 }
 
 func (p *Provider) ReplaceSnapshot(snapshotName string) error {
-	if err := p.CheckIfSnapshotExists(snapshotName); err != nil {
-		return err
-	}
+	return p.withLock(func() error {
+		if err := p.CheckIfSnapshotExists(snapshotName); err != nil {
+			return err
+		}
 
-	if err := p.RemoveSnapshot(snapshotName); err != nil {
-		return fmt.Errorf("failed to remove existing snapshot: %v", err)
-	}
+		// Remove snapshot files directly (not calling RemoveSnapshot to avoid deadlock)
+		snapshotPath := p.snapshotPath(snapshotName)
+		copyPath := p.snapshotCopyPath(snapshotName)
 
-	if err := p.CreateSnapshot(snapshotName); err != nil {
-		return fmt.Errorf("failed to create new snapshot: %v", err)
-	}
+		if err := os.Remove(snapshotPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove existing snapshot: %v", err)
+		}
+		os.Remove(snapshotPath + "-wal")
+		os.Remove(snapshotPath + "-shm")
+		os.Remove(copyPath)
+		os.Remove(copyPath + "-wal")
+		os.Remove(copyPath + "-shm")
 
-	return nil
+		// Create snapshot directly (not calling CreateSnapshot to avoid deadlock)
+		if err := copyFile(p.config.DatabasePath, snapshotPath); err != nil {
+			return fmt.Errorf("failed to create new snapshot: %v", err)
+		}
+		p.copyWALFiles(p.config.DatabasePath, snapshotPath)
+
+		return nil
+	})
 }
 
 func (p *Provider) ListSnapshots() ([]provider.SnapshotInfo, error) {
@@ -231,33 +247,70 @@ func (p *Provider) ListSnapshots() ([]provider.SnapshotInfo, error) {
 
 // For SQLite, we use mutex-based locking, so we just try to acquire the lock
 func (p *Provider) IsSnapshotInProgress(snapshotName string) bool {
-	// Try to acquire the lock without blocking
-	if p.mu.TryLock() {
-		p.mu.Unlock()
+	if p.lock == nil {
+		return false
+	}
+
+	locked, err := p.lock.TryLock()
+	if err != nil {
+		return true
+	}
+	if locked {
+		_ = p.lock.Unlock()
 		return false
 	}
 	return true
 }
 
 func (p *Provider) IsOperationInProgress() bool {
-	if p.mu.TryLock() {
-		p.mu.Unlock()
+	if p.lock == nil {
+		return false
+	}
+
+	locked, err := p.lock.TryLock()
+	if err != nil {
+		return true
+	}
+	if locked {
+		_ = p.lock.Unlock()
 		return false
 	}
 	return true
 }
 
 func (p *Provider) WaitForOngoingSnapshot(snapshotName string) error {
-	// Acquire and release the lock to wait
-	p.mu.Lock()
-	p.mu.Unlock()
-	return nil
+	if p.lock == nil {
+		return nil
+	}
+
+	if err := p.lock.Lock(); err != nil {
+		return fmt.Errorf("failed to acquire lock: %v", err)
+	}
+	return p.lock.Unlock()
 }
 
 func (p *Provider) WaitForOngoingOperations() error {
-	p.mu.Lock()
-	p.mu.Unlock()
-	return nil
+	if p.lock == nil {
+		return nil
+	}
+
+	if err := p.lock.Lock(); err != nil {
+		return fmt.Errorf("failed to acquire lock: %v", err)
+	}
+	return p.lock.Unlock()
+}
+
+func (p *Provider) withLock(action func() error) error {
+	if p.lock == nil {
+		return action()
+	}
+
+	if err := p.lock.Lock(); err != nil {
+		return fmt.Errorf("failed to acquire lock: %v", err)
+	}
+	defer p.lock.Unlock()
+
+	return action()
 }
 
 func (p *Provider) snapshotPath(snapshotName string) string {
