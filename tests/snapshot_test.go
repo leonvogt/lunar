@@ -14,6 +14,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestSnapshot(t *testing.T) {
+	const snapshotName = "production-s1"
+
 	SetupTestDatabase(t)
 	defer TeardownTestContainer(t)
 
@@ -23,18 +25,18 @@ func TestSnapshot(t *testing.T) {
 			t.Fatalf("main.go not found in current directory. Current dir: %s", wd)
 		}
 
-		CreateTestSnapshot(t, "production")
+		CreateTestSnapshot(t, snapshotName)
 
 		os.Chdir("tests")
-		exists, err := internal.DoesDatabaseExist(SnapshotDatabaseName("production"))
+		exists, err := internal.DoesDatabaseExist(SnapshotDatabaseName(snapshotName))
 		if err != nil {
 			t.Fatalf("Error checking database existence: %v", err)
 		}
 		if !exists {
-			t.Errorf("Expected database `%s` to exist - but it does not", SnapshotDatabaseName("production"))
+			t.Errorf("Expected database `%s` to exist - but it does not", SnapshotDatabaseName(snapshotName))
 		}
 
-		CleanupSnapshot("production")
+		CleanupSnapshot(snapshotName)
 	})
 }
 
