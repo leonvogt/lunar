@@ -4,20 +4,6 @@ on: [push, pull_request]
 jobs:
   runner-job:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgres
-        # Set health checks to wait until postgres has started
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
@@ -32,6 +18,3 @@ jobs:
 
       - name: Test
         run: cd tests && go test -v
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432
