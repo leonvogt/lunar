@@ -3,8 +3,6 @@ package tests
 import (
 	"os"
 	"testing"
-
-	"github.com/leonvogt/lunar/internal"
 )
 
 func TestMain(m *testing.M) {
@@ -28,7 +26,7 @@ func TestSnapshot(t *testing.T) {
 		CreateTestSnapshot(t, snapshotName)
 
 		os.Chdir("tests")
-		exists, err := internal.DoesDatabaseExist(SnapshotDatabaseName(snapshotName))
+		exists, err := DoesDatabaseExist(SnapshotDatabaseName(snapshotName))
 		if err != nil {
 			t.Fatalf("Error checking database existence: %v", err)
 		}

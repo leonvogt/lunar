@@ -3,8 +3,6 @@ package tests
 import (
 	"os"
 	"testing"
-
-	"github.com/leonvogt/lunar/internal"
 )
 
 func TestRestore(t *testing.T) {
@@ -13,7 +11,7 @@ func TestRestore(t *testing.T) {
 
 	WithTestDirectory(t, func() {
 		os.Chdir("tests")
-		database, err := internal.ConnectToDatabase("lunar_test")
+		database, err := ConnectToTestDatabase("lunar_test")
 		if err != nil {
 			t.Fatalf("Failed to connect to database: %v", err)
 		}

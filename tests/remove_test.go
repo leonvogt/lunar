@@ -3,8 +3,6 @@ package tests
 import (
 	"os"
 	"testing"
-
-	"github.com/leonvogt/lunar/internal"
 )
 
 func TestRemove(t *testing.T) {
@@ -15,7 +13,7 @@ func TestRemove(t *testing.T) {
 		CreateTestSnapshot(t, "production")
 
 		os.Chdir("tests")
-		exists, err := internal.DoesDatabaseExist(SnapshotDatabaseName("production"))
+		exists, err := DoesDatabaseExist(SnapshotDatabaseName("production"))
 		if err != nil {
 			t.Fatalf("Error checking database existence: %v", err)
 		}
@@ -30,7 +28,7 @@ func TestRemove(t *testing.T) {
 		}
 
 		os.Chdir("tests")
-		exists, err = internal.DoesDatabaseExist(SnapshotDatabaseName("production"))
+		exists, err = DoesDatabaseExist(SnapshotDatabaseName("production"))
 		if err != nil {
 			t.Fatalf("Error checking database existence: %v", err)
 		}

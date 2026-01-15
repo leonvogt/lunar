@@ -3,6 +3,7 @@ package internal
 import (
 	"os"
 
+	"github.com/leonvogt/lunar/internal/provider"
 	"gopkg.in/yaml.v3"
 )
 
@@ -11,23 +12,44 @@ const (
 )
 
 type Config struct {
-	DatabaseUrl         string `yaml:"database_url"`
-	DatabaseName        string `yaml:"database"`
+	// Provider type: "postgres" (default) or "sqlite"
+	ProviderType provider.ProviderType `yaml:"provider,omitempty"`
+
+	// PostgreSQL configuration
+	DatabaseUrl         string `yaml:"database_url,omitempty"`
+	DatabaseName        string `yaml:"database,omitempty"`
 	MaintenanceDatabase string `yaml:"maintenance_database,omitempty"`
+
+	// SQLite configuration (for future use)
+	DatabasePath      string `yaml:"database_path,omitempty"`
+	SnapshotDirectory string `yaml:"snapshot_directory,omitempty"`
 }
 
-// DefaultMaintenanceDatabases returns the list of databases to try for maintenance operations
-// in order of preference
+func (c *Config) GetProviderType() provider.ProviderType {
+	if c.ProviderType == "" {
+		return provider.ProviderTypePostgres
+	}
+	return c.ProviderType
+}
+
 func DefaultMaintenanceDatabases() []string {
 	return []string{"postgres", "template1"}
 }
 
-// GetMaintenanceDatabase returns the configured maintenance database or empty string if not set
 func (c *Config) GetMaintenanceDatabase() string {
 	if c.MaintenanceDatabase != "" {
 		return c.MaintenanceDatabase
 	}
 	return ""
+}
+
+func (c *Config) GetDatabaseIdentifier() string {
+	switch c.GetProviderType() {
+	case provider.ProviderTypeSQLite:
+		return c.DatabasePath
+	default:
+		return c.DatabaseName
+	}
 }
 
 func CreateConfigFile(config *Config, path string) error {

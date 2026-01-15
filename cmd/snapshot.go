@@ -54,7 +54,7 @@ func createSnapshot(args []string) error {
 			stopWaitSpinner()
 		}
 
-		message := fmt.Sprintf("Creating a snapshot for the database %s", config.DatabaseName)
+		message := fmt.Sprintf("Creating a snapshot for the database %s", manager.GetDatabaseIdentifier())
 		stopSpinner := StartSpinner(message)
 
 		if err := manager.CreateMainSnapshot(snapshotName); err != nil {
