@@ -1,4 +1,10 @@
-# Lunar
+<p align="center">
+  <picture >
+    <source height="200" srcset="https://github.com/user-attachments/assets/2ae5cdae-dd08-4da0-8786-68547fcabe49">
+    <img height="200" alt="Expo Orbit" src="https://github.com/user-attachments/assets/2ae5cdae-dd08-4da0-8786-68547fcabe49">
+  </picture>
+  <h1 align="center">Lunar</h1>
+</p>
 
 A tool for creating and restoring snapshots of PostgreSQL databases.
 
