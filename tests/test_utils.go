@@ -10,13 +10,15 @@ import (
 	"time"
 
 	"github.com/leonvogt/lunar/internal"
+	"github.com/leonvogt/lunar/internal/provider/postgres"
+	_ "github.com/lib/pq"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	testpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 var (
-	testContainer *postgres.PostgresContainer
+	testContainer *testpostgres.PostgresContainer
 	testConfig    *internal.Config
 )
 
@@ -28,11 +30,11 @@ func SetupTestContainer(t *testing.T) *internal.Config {
 	ctx := context.Background()
 
 	// Create PostgreSQL container
-	container, err := postgres.RunContainer(ctx,
+	container, err := testpostgres.RunContainer(ctx,
 		testcontainers.WithImage("postgres:15-alpine"),
-		postgres.WithDatabase("lunar_test"),
-		postgres.WithUsername("testuser"),
-		postgres.WithPassword("testpass"),
+		testpostgres.WithDatabase("lunar_test"),
+		testpostgres.WithUsername("testuser"),
+		testpostgres.WithPassword("testpass"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -91,14 +93,21 @@ func SetupTestDatabase(t *testing.T) {
 	os.Setenv("TEST_DATABASE_URL", config.DatabaseUrl)
 	os.Setenv("TEST_DATABASE_NAME", config.DatabaseName)
 
-	database, err := internal.ConnectToDatabase("lunar_test")
+	database, err := postgres.ConnectToMaintenanceDatabaseWithURL(config.DatabaseUrl)
 	if err != nil {
 		t.Fatalf("Failed to connect to test database: %v", err)
 	}
 	defer database.Close()
 
-	CreateUsersTable("lunar_test", database)
-	InsertUsers("lunar_test", database)
+	// Connect to the specific test database
+	testDB, err := sql.Open("postgres", config.DatabaseUrl+"lunar_test?sslmode=disable")
+	if err != nil {
+		t.Fatalf("Failed to open test database: %v", err)
+	}
+	defer testDB.Close()
+
+	CreateUsersTable("lunar_test", testDB)
+	InsertUsers("lunar_test", testDB)
 }
 
 func CreateUsersTable(databaseName string, db *sql.DB) {
@@ -171,8 +180,56 @@ func SnapshotDatabaseName(snapshotName string) string {
 }
 
 func CleanupSnapshot(snapshotName string) {
-	internal.DropDatabase(SnapshotDatabaseName(snapshotName))
-	internal.DropDatabase(SnapshotDatabaseName(snapshotName) + "_copy")
+	config, err := internal.ReadConfig()
+	if err != nil {
+		return
+	}
+
+	db, err := postgres.ConnectToMaintenanceDatabaseWithURL(config.DatabaseUrl)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	// Drop the snapshot and its copy
+	db.Exec("DROP DATABASE IF EXISTS " + SnapshotDatabaseName(snapshotName))
+	db.Exec("DROP DATABASE IF EXISTS " + SnapshotDatabaseName(snapshotName) + "_copy")
+}
+
+// DoesDatabaseExist checks if a database exists (test helper)
+func DoesDatabaseExist(databaseName string) (bool, error) {
+	config, err := internal.ReadConfig()
+	if err != nil {
+		return false, err
+	}
+
+	db, err := postgres.ConnectToMaintenanceDatabaseWithURL(config.DatabaseUrl)
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+
+	var exists bool
+	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", databaseName).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check database existence: %v", err)
+	}
+	return exists, nil
+}
+
+// ConnectToTestDatabase connects to the test database (test helper)
+func ConnectToTestDatabase(databaseName string) (*sql.DB, error) {
+	config, err := internal.ReadConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := sql.Open("postgres", config.DatabaseUrl+databaseName+"?sslmode=disable")
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
 
 func WithTestDirectory(t *testing.T, testFunc func()) {

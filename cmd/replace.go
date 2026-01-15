@@ -35,7 +35,7 @@ func replaceSnapshot(args []string) error {
 			stopWaitSpinner()
 		}
 
-		message := fmt.Sprintf("Replacing snapshot %s for database %s", snapshotName, config.DatabaseName)
+		message := fmt.Sprintf("Replacing snapshot %s for database %s", snapshotName, manager.GetDatabaseIdentifier())
 		stopSpinner := StartSpinner(message)
 
 		if err := manager.ReplaceSnapshot(snapshotName); err != nil {

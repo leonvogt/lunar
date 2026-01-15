@@ -8,6 +8,7 @@ import (
 	"github.com/erikgeiser/promptkit/selection"
 	"github.com/erikgeiser/promptkit/textinput"
 	"github.com/leonvogt/lunar/internal"
+	"github.com/leonvogt/lunar/internal/provider/postgres"
 	"github.com/spf13/cobra"
 )
 
@@ -44,7 +45,7 @@ func initializeProject() {
 		testUrl += "/"
 	}
 
-	db, err := internal.ConnectToMaintenanceDatabaseWithUrl(testUrl)
+	db, err := postgres.ConnectToMaintenanceDatabaseWithURL(testUrl)
 	if err != nil {
 		fmt.Printf("Could not connect to PostgreSQL with the URL %s. Error: %v\n", config.DatabaseUrl, err)
 		fmt.Println("Hint: Make sure at least one of the following databases exists and is accessible: postgres, template1")
@@ -79,14 +80,14 @@ func askForDatabaseUrl() string {
 func askForDatabaseName(databaseUrl string) string {
 	fmt.Println("")
 
-	database, err := internal.ConnectToMaintenanceDatabaseWithUrl(databaseUrl)
+	database, err := postgres.ConnectToMaintenanceDatabaseWithURL(databaseUrl)
 	if err != nil {
 		fmt.Printf("Could not connect to PostgreSQL. Error: %v\n", err)
 		os.Exit(1)
 	}
 	defer database.Close()
 
-	databaseNames, err := internal.AllDatabases(database)
+	databaseNames, err := postgres.AllDatabasesWithConnection(database)
 	if err != nil {
 		fmt.Printf("Could not list databases. Error: %v\n", err)
 		os.Exit(1)

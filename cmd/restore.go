@@ -48,7 +48,7 @@ func restoreSnapshot(args []string) error {
 			stopWaitSpinner()
 		}
 
-		message := fmt.Sprintf("Restoring snapshot %s for database %s", snapshotName, config.DatabaseName)
+		message := fmt.Sprintf("Restoring snapshot %s for database %s", snapshotName, manager.GetDatabaseIdentifier())
 		stopSpinner := StartSpinner(message)
 
 		if err := manager.RestoreSnapshot(snapshotName); err != nil {

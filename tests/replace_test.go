@@ -3,8 +3,6 @@ package tests
 import (
 	"os"
 	"testing"
-
-	"github.com/leonvogt/lunar/internal"
 )
 
 func TestReplace(t *testing.T) {
@@ -16,7 +14,7 @@ func TestReplace(t *testing.T) {
 
 		// Go back to tests directory to check database exists
 		os.Chdir("tests")
-		exists, err := internal.DoesDatabaseExist(SnapshotDatabaseName("production"))
+		exists, err := DoesDatabaseExist(SnapshotDatabaseName("production"))
 		if err != nil {
 			t.Fatalf("Error checking database existence: %v", err)
 		}
