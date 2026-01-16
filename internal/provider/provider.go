@@ -29,6 +29,9 @@ type Provider interface {
 	IsOperationInProgress() bool
 	WaitForOngoingSnapshot(snapshotName string) error
 	WaitForOngoingOperations() error
+
+	// Info operations
+	GetDatabaseSize() (int64, error)
 }
 
 type ProviderType string

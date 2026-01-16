@@ -474,6 +474,15 @@ func (p *Provider) snapshotDatabasesForDatabase(databaseName string) ([]string, 
 	return snapshots, nil
 }
 
+func (p *Provider) GetDatabaseSize() (int64, error) {
+	var size int64
+	err := p.dbConnection.QueryRow("SELECT pg_database_size($1)", p.config.DatabaseName).Scan(&size)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get database size: %v", err)
+	}
+	return size, nil
+}
+
 func snapshotDatabaseName(databaseName, snapshotName string) string {
 	return "lunar_snapshot" + separator + databaseName + separator + snapshotName
 }

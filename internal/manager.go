@@ -102,3 +102,7 @@ func (m *Manager) WaitForOngoingSnapshot(snapshotName string) error {
 func (m *Manager) WaitForOngoingOperations() error {
 	return m.provider.WaitForOngoingOperations()
 }
+
+func (m *Manager) GetDatabaseSize() (int64, error) {
+	return m.provider.GetDatabaseSize()
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/leonvogt/lunar/internal"
+	"github.com/leonvogt/lunar/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +41,7 @@ func restoreSnapshot(args []string) error {
 
 		// Check and wait for any ongoing operations
 		if manager.IsWaitingForOperation() {
-			stopWaitSpinner := StartSpinner("Currently there is a Lunar background operation running. Waiting for it to complete before restoring the snapshot...")
+			stopWaitSpinner := ui.StartSpinner("Currently there is a Lunar background operation running. Waiting for it to complete before restoring the snapshot...")
 			if err := manager.WaitForOngoingOperations(); err != nil {
 				stopWaitSpinner()
 				return fmt.Errorf("failed to wait for ongoing operation: %v", err)
@@ -49,7 +50,7 @@ func restoreSnapshot(args []string) error {
 		}
 
 		message := fmt.Sprintf("Restoring snapshot %s for database %s", snapshotName, manager.GetDatabaseIdentifier())
-		stopSpinner := StartSpinner(message)
+		stopSpinner := ui.StartSpinner(message)
 
 		if err := manager.RestoreSnapshot(snapshotName); err != nil {
 			stopSpinner()
