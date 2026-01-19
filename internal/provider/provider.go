@@ -8,12 +8,6 @@ type SnapshotInfo struct {
 }
 
 type Provider interface {
-	// Close releases any resources held by the provider
-	Close() error
-
-	// (database name for PostgreSQL, file path for SQLite)
-	GetDatabaseIdentifier() string
-
 	// Snapshot operations
 	CheckIfSnapshotCanBeTaken(snapshotName string) error
 	CheckIfSnapshotExists(snapshotName string) error
@@ -29,6 +23,13 @@ type Provider interface {
 	IsOperationInProgress() bool
 	WaitForOngoingSnapshot(snapshotName string) error
 	WaitForOngoingOperations() error
+
+	// Info operations
+	GetDatabaseIdentifier() string
+	GetDatabaseSize() (int64, error)
+
+	// Close releases any resources held by the provider
+	Close() error
 }
 
 type ProviderType string

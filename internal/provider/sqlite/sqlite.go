@@ -58,6 +58,14 @@ func (p *Provider) GetDatabaseIdentifier() string {
 	return p.config.DatabasePath
 }
 
+func (p *Provider) GetDatabaseSize() (int64, error) {
+	info, err := os.Stat(p.config.DatabasePath)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get database size: %v", err)
+	}
+	return info.Size(), nil
+}
+
 func (p *Provider) CheckIfSnapshotCanBeTaken(snapshotName string) error {
 	snapshotPath := p.snapshotPath(snapshotName)
 
