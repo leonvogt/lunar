@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/leonvogt/lunar/internal"
+	"github.com/leonvogt/lunar/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +33,7 @@ func listSnapshots() error {
 		}
 
 		for _, snapshot := range snapshots {
-			ageStr := formatAge(snapshot.Age)
+			ageStr := ui.FormatAge(snapshot.Age)
 			if snapshot.Age == 0 {
 				fmt.Println(snapshot.Name)
 			} else {
@@ -43,37 +43,4 @@ func listSnapshots() error {
 
 		return nil
 	})
-}
-
-func formatAge(age time.Duration) string {
-	if age == 0 {
-		return "unknown"
-	}
-
-	days := int(age.Hours() / 24)
-	hours := int(age.Hours()) % 24
-	minutes := int(age.Minutes()) % 60
-
-	if days > 0 {
-		if days == 1 {
-			return "1 day ago"
-		}
-		return fmt.Sprintf("%d days ago", days)
-	}
-
-	if hours > 0 {
-		if hours == 1 {
-			return "1 hour ago"
-		}
-		return fmt.Sprintf("%d hours ago", hours)
-	}
-
-	if minutes > 0 {
-		if minutes == 1 {
-			return "1 minute ago"
-		}
-		return fmt.Sprintf("%d minutes ago", minutes)
-	}
-
-	return "just now"
 }

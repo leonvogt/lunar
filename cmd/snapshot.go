@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/leonvogt/lunar/internal"
+	"github.com/leonvogt/lunar/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +47,7 @@ func createSnapshot(args []string) error {
 
 		// Check and wait for any ongoing operations
 		if manager.IsWaitingForOperation() {
-			stopWaitSpinner := StartSpinner("Currently there is a Lunar background operation running. Waiting for it to complete before creating the snapshot...")
+			stopWaitSpinner := ui.StartSpinner("Currently there is a Lunar background operation running. Waiting for it to complete before creating the snapshot...")
 			if err := manager.WaitForOngoingOperations(); err != nil {
 				stopWaitSpinner()
 				return fmt.Errorf("failed to wait for ongoing operation: %v", err)
@@ -55,15 +56,19 @@ func createSnapshot(args []string) error {
 		}
 
 		message := fmt.Sprintf("Creating a snapshot for the database %s", manager.GetDatabaseIdentifier())
-		stopSpinner := StartSpinner(message)
+		setInfo, stopSpinner := ui.StartDynamicSpinner(message)
+
+		if size, err := manager.GetDatabaseSize(); err == nil && size > 0 {
+			setInfo(ui.FormatBytes(size))
+		}
 
 		if err := manager.CreateMainSnapshot(snapshotName); err != nil {
 			stopSpinner()
 			return fmt.Errorf("error creating snapshot: %v", err)
 		}
 
-		stopSpinner()
-		fmt.Println("Snapshot created successfully")
+		elapsed := stopSpinner()
+		fmt.Printf("Snapshot created successfully in %s\n", ui.FormatDuration(elapsed))
 
 		if err := spawnBackgroundCommand("snapshot", "create-copy", snapshotName); err != nil {
 			fmt.Printf("Warning: Could not prepare snapshot for fast restore: %v\n", err)
