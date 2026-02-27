@@ -14,7 +14,7 @@ var providerFlag string
 
 var rootCmd = &cobra.Command{
 	Use:     "lunar",
-	Version: "0.1.0-rc.3",
+	Version: "0.1.0",
 	Short:   "A database snapshot tool for PostgreSQL and SQLite databases.",
 	Long:    "Use Lunar to create and restore database snapshots for PostgreSQL and SQLite databases. \nRun 'lunar --help' for more information.",
 }
