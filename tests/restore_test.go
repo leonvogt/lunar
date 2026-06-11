@@ -3,6 +3,8 @@ package tests
 import (
 	"os"
 	"testing"
+
+	"github.com/leonvogt/lunar/internal"
 )
 
 // ============================================================================
@@ -41,6 +43,37 @@ func TestPostgres_Restore(t *testing.T) {
 		if err != nil {
 			t.Errorf("Error restoring snapshot: %v", err)
 		}
+
+		os.Chdir("tests")
+		CleanupSnapshot(snapshotName)
+	})
+}
+
+func TestPostgres_AfterRestoreCommand(t *testing.T) {
+	const snapshotName = "pg-after-hook-test"
+	const markerFile = "after_restore_ran.txt"
+
+	SetupTestDatabase(t)
+	defer TeardownTestContainer(t)
+
+	WithTestDirectory(t, func() {
+		CreateTestSnapshot(t, snapshotName)
+
+		hookConfig := *testConfig
+		hookConfig.AfterRestoreCommand = "touch " + markerFile
+		if err := internal.CreateConfigFile(&hookConfig, "lunar.yml"); err != nil {
+			t.Fatalf("Failed to create config file with hook: %v", err)
+		}
+
+		out, err := RunLunarCommand("restore " + snapshotName)
+		if err != nil {
+			t.Errorf("Error restoring snapshot: %v\nOutput: %s", err, string(out))
+		}
+
+		if _, err := os.Stat(markerFile); os.IsNotExist(err) {
+			t.Errorf("Expected after_restore_command to have created `%s` - but it does not exist", markerFile)
+		}
+		os.Remove(markerFile)
 
 		os.Chdir("tests")
 		CleanupSnapshot(snapshotName)

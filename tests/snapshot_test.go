@@ -2,7 +2,10 @@ package tests
 
 import (
 	"os"
+	"strings"
 	"testing"
+
+	"github.com/leonvogt/lunar/internal"
 )
 
 func TestMain(m *testing.M) {
@@ -62,6 +65,75 @@ func TestPostgres_SnapshotAlreadyExists(t *testing.T) {
 		}
 
 		os.Chdir("tests")
+		CleanupSnapshot(snapshotName)
+	})
+}
+
+func TestPostgres_BeforeSnapshotCommand(t *testing.T) {
+	const snapshotName = "pg-before-hook-test"
+	const markerFile = "before_snapshot_ran.txt"
+
+	SetupTestDatabase(t)
+	defer TeardownTestContainer(t)
+
+	WithTestDirectory(t, func() {
+		hookConfig := *testConfig
+		hookConfig.BeforeSnapshotCommand = "touch " + markerFile
+		if err := internal.CreateConfigFile(&hookConfig, "lunar.yml"); err != nil {
+			t.Fatalf("Failed to create config file with hook: %v", err)
+		}
+
+		CreateTestSnapshot(t, snapshotName)
+
+		if _, err := os.Stat(markerFile); os.IsNotExist(err) {
+			t.Errorf("Expected before_snapshot_command to have created `%s` - but it does not exist", markerFile)
+		}
+		os.Remove(markerFile)
+
+		os.Chdir("tests")
+		exists, err := DoesDatabaseExist(SnapshotDatabaseName(snapshotName))
+		if err != nil {
+			t.Fatalf("Error checking database existence: %v", err)
+		}
+		if !exists {
+			t.Errorf("Expected database `%s` to exist - but it does not", SnapshotDatabaseName(snapshotName))
+		}
+
+		CleanupSnapshot(snapshotName)
+	})
+}
+
+func TestPostgres_BeforeSnapshotCommandFailureAbortsSnapshot(t *testing.T) {
+	const snapshotName = "pg-before-hook-failure-test"
+
+	SetupTestDatabase(t)
+	defer TeardownTestContainer(t)
+
+	WithTestDirectory(t, func() {
+		hookConfig := *testConfig
+		hookConfig.BeforeSnapshotCommand = "exit 1"
+		if err := internal.CreateConfigFile(&hookConfig, "lunar.yml"); err != nil {
+			t.Fatalf("Failed to create config file with hook: %v", err)
+		}
+
+		out, err := RunLunarCommand("snapshot " + snapshotName)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		if !strings.Contains(string(out), "snapshot aborted: before_snapshot_command failed") {
+			t.Errorf("Expected output to mention the aborted snapshot but got '%v'", string(out))
+		}
+
+		os.Chdir("tests")
+		exists, err := DoesDatabaseExist(SnapshotDatabaseName(snapshotName))
+		if err != nil {
+			t.Fatalf("Error checking database existence: %v", err)
+		}
+		if exists {
+			t.Errorf("Expected database `%s` to not exist after failed hook - but it does", SnapshotDatabaseName(snapshotName))
+		}
+
 		CleanupSnapshot(snapshotName)
 	})
 }
