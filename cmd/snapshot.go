@@ -55,6 +55,12 @@ func createSnapshot(args []string) error {
 			stopWaitSpinner()
 		}
 
+		if config.BeforeSnapshotCommand != "" {
+			if err := runHookCommand("before_snapshot_command", config.BeforeSnapshotCommand, config.ConfigDir()); err != nil {
+				return fmt.Errorf("snapshot aborted: %v", err)
+			}
+		}
+
 		message := fmt.Sprintf("Creating a snapshot for the database %s", manager.GetDatabaseIdentifier())
 		setInfo, stopSpinner := ui.StartDynamicSpinner(message)
 

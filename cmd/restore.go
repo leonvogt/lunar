@@ -64,6 +64,12 @@ func restoreSnapshot(args []string) error {
 			fmt.Printf("Warning: Could not prepare snapshot for next restore: %v\n", err)
 		}
 
+		if config.AfterRestoreCommand != "" {
+			if err := runHookCommand("after_restore_command", config.AfterRestoreCommand, config.ConfigDir()); err != nil {
+				return fmt.Errorf("snapshot was restored, but %v", err)
+			}
+		}
+
 		return nil
 	})
 }

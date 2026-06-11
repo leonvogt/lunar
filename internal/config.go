@@ -25,6 +25,10 @@ type Config struct {
 	DatabasePath      string `yaml:"database_path,omitempty"`
 	SnapshotDirectory string `yaml:"snapshot_directory,omitempty"`
 
+	// Hook commands
+	BeforeSnapshotCommand string `yaml:"before_snapshot_command,omitempty"`
+	AfterRestoreCommand   string `yaml:"after_restore_command,omitempty"`
+
 	configPath string `yaml:"-"`
 	configDir  string `yaml:"-"`
 }
@@ -54,6 +58,10 @@ func (c *Config) GetDatabaseIdentifier() string {
 	default:
 		return c.DatabaseName
 	}
+}
+
+func (c *Config) ConfigDir() string {
+	return c.configDir
 }
 
 func (c *Config) GetResolvedDatabasePath() string {

@@ -70,6 +70,22 @@ func getSnapshotNameFromArgsOrPrompt(args []string, manager *internal.Manager, p
 	return selectSnapshot(manager, promptMessage)
 }
 
+func runHookCommand(hookName, command, dir string) error {
+	fmt.Printf("Running %s: %s\n", hookName, command)
+
+	hookCommand := exec.Command("sh", "-c", command)
+	hookCommand.Dir = dir
+	hookCommand.Stdout = os.Stdout
+	hookCommand.Stderr = os.Stderr
+	hookCommand.Stdin = os.Stdin
+
+	if err := hookCommand.Run(); err != nil {
+		return fmt.Errorf("%s failed: %v", hookName, err)
+	}
+
+	return nil
+}
+
 // spawnBackgroundCommand starts a background process with the given arguments.
 // The process runs independently and survives after the parent exits.
 func spawnBackgroundCommand(args ...string) error {

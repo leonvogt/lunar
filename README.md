@@ -70,36 +70,28 @@ Lunar uses a `lunar.yml` configuration file. Run `lunar init` to create one inte
 ### PostgreSQL
 
 ```yaml
-database_url: postgres://localhost:5432/
-database: my_database
+database_url: postgres://localhost:5432/ # Connection URL without database name
+database: my_database                    # Database to snapshot
+maintenance_database: postgres           # Optional - database for admin operations
 ```
-
-#### Options
-
-| Option | Required | Description |
-|--------|----------|-------------|
-| `provider` | No | Set to `postgres` (default if omitted) |
-| `database_url` | Yes | PostgreSQL connection URL without database name |
-| `database` | Yes | Name of the database to snapshot |
-| `maintenance_database` | No | Database for admin operations (default: tries `postgres`, then `template1`) |
 
 ### SQLite
 
 ```yaml
 provider: sqlite
-database_path: ./myapp.db
-snapshot_directory: ./.lunar_snapshots
+database_path: ./myapp.db              # Path relative to lunar.yml
+snapshot_directory: ./.lunar_snapshots # Optional - where snapshots are stored
 ```
 
-#### Options
+### Hooks
 
-| Option | Required | Description |
-|--------|----------|-------------|
-| `provider` | Yes | Must be `sqlite` for SQLite databases |
-| `database_path` | Yes | Path to the SQLite database file (relative or absolute) |
-| `snapshot_directory` | No | Directory to store snapshots (default: `.lunar_snapshots` next to database) |
+```yaml
+# Runs before a snapshot is created - if it fails, the snapshot is aborted
+before_snapshot_command: "psql -d my_database -c 'TRUNCATE TABLE versions;'"
 
-> **Note:** Paths are relative to the `lunar.yml` file location
+# Runs after a snapshot has been restored
+after_restore_command: "bundle exec rails db:migrate"
+```
 
 
 ## Development
