@@ -44,6 +44,10 @@ func (m *dynamicSpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m, nil
 
+	case quitMsg:
+		m.quitting = true
+		return m, tea.Quit
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -63,7 +67,7 @@ func (m *dynamicSpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *dynamicSpinnerModel) View() string {
 	if m.quitting {
-		return "\r\033[2K\033[1A\033[2K\033[1A\033[2K"
+		return ""
 	}
 
 	elapsed := time.Since(m.startTime).Round(time.Second)
@@ -103,10 +107,8 @@ func StartDynamicSpinner(message string) (setInfo func(info string), stop func()
 
 	stop = func() time.Duration {
 		elapsed := time.Since(m.startTime)
-		m.quitting = true
-		p.Quit()
+		p.Send(quitMsg{}) // Quit the spinner (handled in Update)
 		<-done
-		fmt.Print("\r")
 		return elapsed
 	}
 

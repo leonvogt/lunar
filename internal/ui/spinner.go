@@ -11,8 +11,10 @@ type spinnerModel struct {
 	spinner  spinner.Model
 	quitting bool
 	message  string
-	done     chan bool
 }
+
+// quitMsg signals a spinner to tear down.
+type quitMsg struct{}
 
 func newSpinnerModel(message string) *spinnerModel {
 	s := spinner.New()
@@ -20,7 +22,6 @@ func newSpinnerModel(message string) *spinnerModel {
 	return &spinnerModel{
 		spinner: s,
 		message: message,
-		done:    make(chan bool),
 	}
 }
 
@@ -32,6 +33,10 @@ func (m *spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m, nil
+
+	case quitMsg:
+		m.quitting = true
+		return m, tea.Quit
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -45,8 +50,8 @@ func (m *spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *spinnerModel) View() string {
 	if m.quitting {
-		// Clear the spinner lines when quitting
-		return "\r\033[2K\033[1A\033[2K\033[1A\033[2K"
+		// Render nothing; bubbletea erases the spinner's own lines on teardown.
+		return ""
 	}
 	return fmt.Sprintf("\n\n   %s %s\n\n", m.spinner.View(), m.message)
 }
@@ -68,10 +73,7 @@ func StartSpinner(message string) func() {
 
 	// Return a function to stop the spinner
 	return func() {
-		m.quitting = true
-		p.Quit() // Quit the spinner
-		<-done   // Wait for the spinner to actually finish
-		// Additional cleanup - print a carriage return to ensure clean line
-		fmt.Print("\r")
+		p.Send(quitMsg{}) // Quit the spinner (handled in Update)
+		<-done            // Wait for the spinner to actually finish
 	}
 }
