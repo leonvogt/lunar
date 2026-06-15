@@ -176,7 +176,7 @@ func CreateTestSnapshot(t *testing.T, snapshotName string) {
 }
 
 func SnapshotDatabaseName(snapshotName string) string {
-	return "lunar_snapshot____lunar_test____" + snapshotName
+	return "lunar:lunar_test:" + snapshotName
 }
 
 func CleanupSnapshot(snapshotName string) {
@@ -192,8 +192,8 @@ func CleanupSnapshot(snapshotName string) {
 	defer db.Close()
 
 	// Drop the snapshot and its copy
-	db.Exec("DROP DATABASE IF EXISTS " + SnapshotDatabaseName(snapshotName))
-	db.Exec("DROP DATABASE IF EXISTS " + SnapshotDatabaseName(snapshotName) + "_copy")
+	db.Exec(`DROP DATABASE IF EXISTS "` + SnapshotDatabaseName(snapshotName) + `"`)
+	db.Exec(`DROP DATABASE IF EXISTS "` + SnapshotDatabaseName(snapshotName) + `:copy"`)
 }
 
 // DoesDatabaseExist checks if a database exists (test helper)
