@@ -10,7 +10,7 @@ import (
 var (
 	removeCmd = &cobra.Command{
 		Use:     "remove [snapshot]",
-		Aliases: []string{"drop", "delete"},
+		Aliases: []string{"drop", "delete", "rm"},
 		Short:   "Removes a snapshot",
 		Run: func(_ *cobra.Command, args []string) {
 			if err := removeSnapshot(args); err != nil {

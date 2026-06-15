@@ -10,8 +10,9 @@ import (
 
 var (
 	listCmd = &cobra.Command{
-		Use:   "list",
-		Short: "List all snapshots",
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List all snapshots",
 		Run: func(_ *cobra.Command, args []string) {
 			if err := listSnapshots(); err != nil {
 				fmt.Println(err)
