@@ -13,7 +13,17 @@ import (
 	_ "github.com/lib/pq"
 )
 
-const separator = "____"
+const (
+	// "lunar:<db_name>:<snapshot_name>" (copy: "lunar:<db_name>:<snapshot_name>:copy").
+	namePrefix    = "lunar"
+	nameSeparator = ":"
+	copySuffix    = "copy"
+
+	// Legacy naming scheme: "lunar_snapshot____<db_name>____<snapshot_name>" (copy: ..."_copy").
+	legacyPrefix     = "lunar_snapshot"
+	legacySeparator  = "____"
+	legacyCopySuffix = "_copy"
+)
 
 // Maximum length (in bytes) of a Postgres identifier.
 const maxIdentifierLength = 63
@@ -57,9 +67,7 @@ func (p *Provider) CheckIfSnapshotCanBeTaken(snapshotName string) error {
 		return err
 	}
 
-	snapshotDBName := snapshotDatabaseName(p.config.DatabaseName, snapshotName)
-
-	exists, err := p.doesDatabaseExist(snapshotDBName)
+	_, exists, err := p.resolveSnapshotDBName(snapshotName)
 	if err != nil {
 		return err
 	}
@@ -71,9 +79,7 @@ func (p *Provider) CheckIfSnapshotCanBeTaken(snapshotName string) error {
 }
 
 func (p *Provider) CheckIfSnapshotExists(snapshotName string) error {
-	snapshotDBName := snapshotDatabaseName(p.config.DatabaseName, snapshotName)
-
-	exists, err := p.doesDatabaseExist(snapshotDBName)
+	_, exists, err := p.resolveSnapshotDBName(snapshotName)
 	if err != nil {
 		return err
 	}
@@ -107,8 +113,15 @@ func (p *Provider) CreateSnapshot(snapshotName string) error {
 
 func (p *Provider) CreateSnapshotCopy(snapshotName string) error {
 	databaseName := p.config.DatabaseName
-	snapshotDBName := snapshotDatabaseName(databaseName, snapshotName)
-	snapshotCopyDBName := snapshotCopyDatabaseName(databaseName, snapshotName)
+
+	snapshotDBName, exists, err := p.resolveSnapshotDBName(snapshotName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("snapshot %s does not exist", snapshotName)
+	}
+	snapshotCopyDBName := snapshotCopyNameForDB(snapshotDBName)
 
 	if err := p.markOperationStart(databaseName); err != nil {
 		return fmt.Errorf("failed to acquire operation lock: %v", err)
@@ -128,10 +141,8 @@ func (p *Provider) CreateSnapshotCopy(snapshotName string) error {
 
 func (p *Provider) RestoreSnapshot(snapshotName string) error {
 	databaseName := p.config.DatabaseName
-	snapshotDBName := snapshotDatabaseName(databaseName, snapshotName)
-	snapshotCopyDBName := snapshotCopyDatabaseName(databaseName, snapshotName)
 
-	copyExists, err := p.doesDatabaseExist(snapshotCopyDBName)
+	snapshotCopyDBName, copyExists, err := p.resolveSnapshotCopyDBName(snapshotName)
 	if err != nil {
 		return err
 	}
@@ -161,7 +172,7 @@ func (p *Provider) RestoreSnapshot(snapshotName string) error {
 		return fmt.Errorf("failed to restore snapshot: %v", err)
 	}
 
-	snapshotExists, err := p.doesDatabaseExist(snapshotDBName)
+	_, snapshotExists, err := p.resolveSnapshotDBName(snapshotName)
 	if err != nil {
 		return fmt.Errorf("failed to verify snapshot: %v", err)
 	}
@@ -174,29 +185,30 @@ func (p *Provider) RestoreSnapshot(snapshotName string) error {
 
 func (p *Provider) RemoveSnapshot(snapshotName string) error {
 	databaseName := p.config.DatabaseName
-	snapshotDBName := snapshotDatabaseName(databaseName, snapshotName)
-	snapshotCopyDBName := snapshotCopyDatabaseName(databaseName, snapshotName)
 
-	if err := p.terminateConnections(snapshotDBName); err != nil {
-		return fmt.Errorf("failed to terminate connections to snapshot: %v", err)
+	// Drop the snapshot and its copy under both the new and the legacy scheme.
+	// dropDatabase uses "IF EXISTS", so dropping a non-existent candidate is a no-op.
+	candidates := []string{
+		snapshotDatabaseName(databaseName, snapshotName),
+		snapshotCopyDatabaseName(databaseName, snapshotName),
+		legacySnapshotDatabaseName(databaseName, snapshotName),
+		legacySnapshotCopyDatabaseName(databaseName, snapshotName),
 	}
 
-	if err := p.dropDatabase(snapshotDBName); err != nil {
-		return fmt.Errorf("failed to drop snapshot database: %v", err)
-	}
-
-	// Also remove the _copy database if it exists
-	copyExists, err := p.doesDatabaseExist(snapshotCopyDBName)
-	if err != nil {
-		return fmt.Errorf("failed to check if snapshot copy exists: %v", err)
-	}
-
-	if copyExists {
-		if err := p.terminateConnections(snapshotCopyDBName); err != nil {
-			return fmt.Errorf("failed to terminate connections to snapshot copy: %v", err)
+	for _, dbName := range candidates {
+		exists, err := p.doesDatabaseExist(dbName)
+		if err != nil {
+			return fmt.Errorf("failed to check if snapshot database exists: %v", err)
 		}
-		if err := p.dropDatabase(snapshotCopyDBName); err != nil {
-			return fmt.Errorf("failed to drop snapshot copy database: %v", err)
+		if !exists {
+			continue
+		}
+
+		if err := p.terminateConnections(dbName); err != nil {
+			return fmt.Errorf("failed to terminate connections to snapshot: %v", err)
+		}
+		if err := p.dropDatabase(dbName); err != nil {
+			return fmt.Errorf("failed to drop snapshot database: %v", err)
 		}
 	}
 
@@ -242,7 +254,15 @@ func (p *Provider) ListSnapshots() ([]provider.SnapshotInfo, error) {
 
 	snapshots := make([]provider.SnapshotInfo, 0, len(snapshotNames))
 	for _, name := range snapshotNames {
-		snapshotDBName := snapshotDatabaseName(databaseName, name)
+		snapshotDBName, found, err := p.resolveSnapshotDBName(name)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			snapshots = append(snapshots, provider.SnapshotInfo{Name: name, Age: 0})
+			continue
+		}
+
 		creationTime, err := p.getDatabaseAge(snapshotDBName)
 		if err != nil {
 			snapshots = append(snapshots, provider.SnapshotInfo{Name: name, Age: 0})
@@ -449,15 +469,18 @@ func (p *Provider) allSnapshotDatabases() ([]string, error) {
 	}
 
 	snapshotDatabases := make([]string, 0)
-	expectedPrefix := "lunar_snapshot" + separator
-
 	for _, databaseName := range databases {
-		if len(databaseName) >= len(expectedPrefix) && databaseName[:len(expectedPrefix)] == expectedPrefix {
+		if IsSnapshotDatabase(databaseName) {
 			snapshotDatabases = append(snapshotDatabases, databaseName)
 		}
 	}
 
 	return snapshotDatabases, nil
+}
+
+func IsSnapshotDatabase(databaseName string) bool {
+	return strings.HasPrefix(databaseName, namePrefix+nameSeparator) ||
+		strings.HasPrefix(databaseName, legacyPrefix+legacySeparator)
 }
 
 func (p *Provider) snapshotDatabasesForDatabase(databaseName string) ([]string, error) {
@@ -466,19 +489,43 @@ func (p *Provider) snapshotDatabasesForDatabase(databaseName string) ([]string, 
 		return nil, err
 	}
 
+	seen := make(map[string]struct{})
 	snapshots := make([]string, 0)
 	for _, snapshotDB := range allSnapshots {
-		parts := strings.Split(snapshotDB, separator)
-
-		if len(parts) >= 3 && parts[1] == databaseName {
-			snapshotName := parts[2]
-			if !strings.HasSuffix(snapshotName, "_copy") {
-				snapshots = append(snapshots, snapshotName)
-			}
+		name, ok := parseSnapshotName(snapshotDB, databaseName)
+		if !ok {
+			continue
 		}
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		snapshots = append(snapshots, name)
 	}
 
 	return snapshots, nil
+}
+
+// Extract the snapshot name. Trying the new scheme first, then the legacy scheme.
+func parseSnapshotName(snapshotDB, databaseName string) (string, bool) {
+	newPrefix := namePrefix + nameSeparator + databaseName + nameSeparator
+	if rest, ok := strings.CutPrefix(snapshotDB, newPrefix); ok {
+		if strings.HasSuffix(rest, nameSeparator+copySuffix) {
+			return "", false
+		}
+		return rest, true
+	}
+
+	parts := strings.Split(snapshotDB, legacySeparator)
+	if len(parts) >= 3 && parts[0] == legacyPrefix && parts[1] == databaseName {
+		name := parts[2]
+		if strings.HasSuffix(name, legacyCopySuffix) {
+			return "", false
+		}
+		return name, true
+	}
+
+	return "", false
 }
 
 func (p *Provider) GetDatabaseSize() (int64, error) {
@@ -495,8 +542,13 @@ func (p *Provider) validateSnapshotName(snapshotName string) error {
 		return fmt.Errorf("snapshot name cannot be empty")
 	}
 
-	if strings.Contains(snapshotName, separator) {
-		return fmt.Errorf("snapshot name cannot contain %d or more consecutive underscores", len(separator))
+	// Both separators are used to parse snapshot names back out of the database
+	// name (new and legacy scheme), so a name containing either would be lost.
+	if strings.Contains(snapshotName, nameSeparator) {
+		return fmt.Errorf("snapshot name cannot contain %q", nameSeparator)
+	}
+	if strings.Contains(snapshotName, legacySeparator) {
+		return fmt.Errorf("snapshot name cannot contain %d or more consecutive underscores", len(legacySeparator))
 	}
 
 	copyDBName := snapshotCopyDatabaseName(p.config.DatabaseName, snapshotName)
@@ -511,12 +563,67 @@ func (p *Provider) validateSnapshotName(snapshotName string) error {
 	return nil
 }
 
+func mustUseLegacyScheme(databaseName string) bool {
+	return strings.Contains(databaseName, nameSeparator)
+}
+
 func snapshotDatabaseName(databaseName, snapshotName string) string {
-	return "lunar_snapshot" + separator + databaseName + separator + snapshotName
+	if mustUseLegacyScheme(databaseName) {
+		return legacySnapshotDatabaseName(databaseName, snapshotName)
+	}
+	return namePrefix + nameSeparator + databaseName + nameSeparator + snapshotName
 }
 
 func snapshotCopyDatabaseName(databaseName, snapshotName string) string {
-	return snapshotDatabaseName(databaseName, snapshotName) + "_copy"
+	if mustUseLegacyScheme(databaseName) {
+		return legacySnapshotCopyDatabaseName(databaseName, snapshotName)
+	}
+	return snapshotDatabaseName(databaseName, snapshotName) + nameSeparator + copySuffix
+}
+
+func legacySnapshotDatabaseName(databaseName, snapshotName string) string {
+	return legacyPrefix + legacySeparator + databaseName + legacySeparator + snapshotName
+}
+
+func legacySnapshotCopyDatabaseName(databaseName, snapshotName string) string {
+	return legacySnapshotDatabaseName(databaseName, snapshotName) + legacyCopySuffix
+}
+
+func snapshotCopyNameForDB(snapshotDBName string) string {
+	if strings.HasPrefix(snapshotDBName, legacyPrefix+legacySeparator) {
+		return snapshotDBName + legacyCopySuffix
+	}
+	return snapshotDBName + nameSeparator + copySuffix
+}
+
+// Extract the actual database name for a snapshot
+func (p *Provider) resolveSnapshotDBName(snapshotName string) (string, bool, error) {
+	return p.resolveExisting(
+		snapshotDatabaseName(p.config.DatabaseName, snapshotName),
+		legacySnapshotDatabaseName(p.config.DatabaseName, snapshotName),
+	)
+}
+
+// Extract the actual database name for a snapshot copy
+func (p *Provider) resolveSnapshotCopyDBName(snapshotName string) (string, bool, error) {
+	return p.resolveExisting(
+		snapshotCopyDatabaseName(p.config.DatabaseName, snapshotName),
+		legacySnapshotCopyDatabaseName(p.config.DatabaseName, snapshotName),
+	)
+}
+
+// Returns the first of the candidate database names that exists
+func (p *Provider) resolveExisting(candidates ...string) (string, bool, error) {
+	for _, name := range candidates {
+		exists, err := p.doesDatabaseExist(name)
+		if err != nil {
+			return "", false, err
+		}
+		if exists {
+			return name, true, nil
+		}
+	}
+	return "", false, nil
 }
 
 func defaultMaintenanceDatabases() []string {

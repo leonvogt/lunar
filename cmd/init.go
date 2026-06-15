@@ -165,7 +165,7 @@ func askForDatabaseName(databaseUrl string) string {
 		if name == "postgres" {
 			continue
 		}
-		if strings.HasPrefix(name, "lunar_snapshot____") {
+		if postgres.IsSnapshotDatabase(name) {
 			continue
 		}
 		filteredDatabaseNames = append(filteredDatabaseNames, name)
