@@ -104,7 +104,7 @@ func TestPostgres_BeforeSnapshotCommand(t *testing.T) {
 }
 
 func TestPostgres_BeforeSnapshotCommandFailureAbortsSnapshot(t *testing.T) {
-	const snapshotName = "pg-before-hook-failure-test"
+	const snapshotName = "pg-before-hook-fail"
 
 	SetupTestDatabase(t)
 	defer TeardownTestContainer(t)

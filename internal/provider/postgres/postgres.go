@@ -15,6 +15,9 @@ import (
 
 const separator = "____"
 
+// Maximum length (in bytes) of a Postgres identifier.
+const maxIdentifierLength = 63
+
 type Config struct {
 	DatabaseURL         string
 	DatabaseName        string
@@ -50,6 +53,10 @@ func (p *Provider) GetDatabaseIdentifier() string {
 }
 
 func (p *Provider) CheckIfSnapshotCanBeTaken(snapshotName string) error {
+	if err := p.validateSnapshotName(snapshotName); err != nil {
+		return err
+	}
+
 	snapshotDBName := snapshotDatabaseName(p.config.DatabaseName, snapshotName)
 
 	exists, err := p.doesDatabaseExist(snapshotDBName)
@@ -481,6 +488,27 @@ func (p *Provider) GetDatabaseSize() (int64, error) {
 		return 0, fmt.Errorf("failed to get database size: %v", err)
 	}
 	return size, nil
+}
+
+func (p *Provider) validateSnapshotName(snapshotName string) error {
+	if snapshotName == "" {
+		return fmt.Errorf("snapshot name cannot be empty")
+	}
+
+	if strings.Contains(snapshotName, separator) {
+		return fmt.Errorf("snapshot name cannot contain %d or more consecutive underscores", len(separator))
+	}
+
+	copyDBName := snapshotCopyDatabaseName(p.config.DatabaseName, snapshotName)
+	if len(copyDBName) > maxIdentifierLength {
+		maxNameLen := len(snapshotName) - (len(copyDBName) - maxIdentifierLength)
+		if maxNameLen < 0 {
+			maxNameLen = 0
+		}
+		return fmt.Errorf("snapshot name is too long for database %q: please use at most %d characters", p.config.DatabaseName, maxNameLen)
+	}
+
+	return nil
 }
 
 func snapshotDatabaseName(databaseName, snapshotName string) string {
