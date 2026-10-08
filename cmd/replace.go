@@ -36,6 +36,12 @@ func replaceSnapshot(args []string) error {
 			stopWaitSpinner()
 		}
 
+		if config.BeforeSnapshotCommand != "" {
+			if err := runHookCommand("before_snapshot_command", config.BeforeSnapshotCommand, config.ConfigDir()); err != nil {
+				return fmt.Errorf("replace aborted: %v", err)
+			}
+		}
+
 		message := fmt.Sprintf("Replacing snapshot %s for database %s", snapshotName, manager.GetDatabaseIdentifier())
 		setInfo, stopSpinner := ui.StartDynamicSpinner(message)
 

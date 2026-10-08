@@ -86,7 +86,7 @@ snapshot_directory: ./.lunar_snapshots # Optional - where snapshots are stored
 ### Hooks
 
 ```yaml
-# Runs before a snapshot is created - if it fails, the snapshot is aborted
+# Runs before a snapshot is created or replaced - if it fails, the operation is aborted
 before_snapshot_command: "psql -d my_database -c 'TRUNCATE TABLE versions;'"
 
 # Runs after a snapshot has been restored
